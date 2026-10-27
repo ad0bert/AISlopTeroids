@@ -1,0 +1,47 @@
+name: build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      # The engine comes from its public repository, built at the tag of the version pom.xml asks for: no package
+      # registry credentials needed.
+      - name: Build and install the engine
+        run: |
+          engine=$(mvn -B -q help:evaluate -Dexpression=engine.version -DforceStdout)
+          echo "Engine $engine"
+          git clone -q --depth 1 --branch "v$engine" https://github.com/ad0bert/EngineNamedScratch.git \
+            "$RUNNER_TEMP/engine"
+          cd "$RUNNER_TEMP/engine"
+          mvn -B -q versions:set -DnewVersion="$engine" -DgenerateBackupPoms=false
+          mvn -B -q install -DskipTests -pl engine -am
+      - run: mvn -B verify
+      # Runs the game on Mesa's software OpenGL in a virtual X server (GL errors throw) and keeps the last frames:
+      # the title screen, and a game flying itself.
+      - name: Smoke-run the game (Xvfb + Mesa)
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y -q xvfb libgl1-mesa-dri
+          run() {
+            name=$1; frames=$2; shift 2
+            timeout 300 xvfb-run -a -s "-screen 0 1280x800x24" java -Dengine.debugGL=true \
+              -Dengine.exitAfterFrames="$frames" -Dengine.captureMouse=false -Dengine.userDir="smoke-$name" \
+              -Dengine.screenshot="smoke-$name.png" "$@" -jar target/dist/simple-astroids.jar 2>&1 | tee "smoke-$name.log"
+            grep -q "Saved screenshot" "smoke-$name.log"
+            ! grep -E "Exception|GLException|ERROR" "smoke-$name.log"
+          }
+          run title 90
+          run play 600 -Dastroids.autopilot=true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: smoke-run
+          path: |
+            smoke-*.png
+            smoke-*.log

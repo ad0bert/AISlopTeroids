@@ -1,0 +1,215 @@
+package astroids;
+
+import java.util.Locale;
+
+import org.joml.Vector2f;
+import org.joml.Vector3f;
+
+import astroids.model.Controls;
+import astroids.model.GameEvent;
+import astroids.model.World;
+import engine.core.Engine;
+import engine.core.LevelState;
+import engine.ecs.Entity;
+import engine.input.InputState;
+import engine.render.Camera;
+import engine.render.UiCanvas;
+
+/**
+ * A game in progress: the player's ship is the camera. Mouse (or right stick) looks, W/S thrust along the view, A/D
+ * slide, Space/Shift rise and sink, click or Ctrl fires. The ship keeps drifting after letting go of thrust, as in the
+ * original.
+ *
+ * <p>
+ * {@code -Dastroids.autopilot=true} flies by itself (turning and firing), for screenshots and smoke tests.
+ */
+final class PlayState extends LevelState {
+  private static final float MOUSE_DEGREES_PER_PIXEL = 0.1f;
+  private static final float STICK_DEGREES_PER_SECOND = 140f;
+
+  private final AstroidsGame game;
+  private final boolean autopilot = Boolean.getBoolean("astroids.autopilot");
+  private World world;
+  private WorldView view;
+  private Entity camera;
+  private float yaw;
+  private float pitch;
+  private boolean wasCaptured;
+  private float time;
+
+  private String message = "";
+  private float messageUntil;
+  private float flash;
+
+  private final Vector3f forward = new Vector3f();
+  private final Vector3f right = new Vector3f();
+  private final Vector3f up = new Vector3f();
+  private final Vector3f thrust = new Vector3f();
+  private final Vector2f stick = new Vector2f();
+
+  PlayState(AstroidsGame game) {
+    this.game = game;
+  }
+
+  @Override
+  protected void build(Engine engine) {
+    this.world = World.newGame(System.nanoTime());
+    this.view = new WorldView(engine, this.game.art());
+    this.camera = this.game.art().addBackdrop(engine.scene());
+    this.wasCaptured = engine.isMouseCaptured();
+    afterStep(engine, 0f);
+  }
+
+  @Override
+  public void revealed(Engine engine) {
+    this.wasCaptured = engine.isMouseCaptured(); // back from the pause menu: start watching the mouse afresh
+  }
+
+  @Override
+  public void update(Engine engine, double dtD) {
+    final float dt = (float) dtD;
+    this.time += dt;
+    final var input = engine.input();
+    look(engine, dt);
+
+    final var t = this.camera.transform();
+    t.forward(this.forward);
+    t.right(this.right);
+    this.up.set(this.right).cross(this.forward);
+    this.thrust.zero();
+    axis(input, "forward", "back", this.forward);
+    axis(input, "right", "left", this.right);
+    axis(input, "up", "down", this.up);
+    final var pad = input.firstGamepad();
+    if (pad != null) {
+      final var move = pad.leftStick(this.stick);
+      this.thrust.fma(move.y, this.forward).fma(move.x, this.right);
+    }
+    boolean fire = input.isActionDown("fire") || (engine.isMouseCaptured()
+        && input.isMouseDown(InputState.BUTTON_LEFT));
+    if (this.autopilot) {
+      this.thrust.set(this.forward).mul(0.3f);
+      fire = true;
+    }
+    this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire));
+    afterStep(engine, dt);
+
+    if (!this.world.isGameOver()) {
+      final boolean captured = engine.isMouseCaptured();
+      if (input.wasActionPressed("pause") || (this.wasCaptured && !captured)) {
+        engine.states().push(new PauseState());
+      }
+      this.wasCaptured = captured;
+    }
+  }
+
+  /** Lets the finished game drift on behind the game-over screen. */
+  void drift(Engine engine, float dt) {
+    this.time += dt;
+    this.world.step(dt, Controls.NONE);
+    afterStep(engine, dt);
+  }
+
+  private void look(Engine engine, float dt) {
+    final var input = engine.input();
+    this.yaw -= input.consumeMouseDx() * MOUSE_DEGREES_PER_PIXEL;
+    this.pitch -= input.consumeMouseDy() * MOUSE_DEGREES_PER_PIXEL;
+    final var pad = input.firstGamepad();
+    if (pad != null) {
+      final var look = pad.rightStick(this.stick);
+      this.yaw -= look.x * STICK_DEGREES_PER_SECOND * dt;
+      this.pitch += look.y * STICK_DEGREES_PER_SECOND * dt;
+    }
+    if (this.autopilot) {
+      this.yaw += 25f * dt;
+      this.pitch = 12f * (float) Math.sin(this.time * 0.7f);
+    }
+    this.pitch = Math.max(-85f, Math.min(85f, this.pitch));
+    this.camera.transform().rotation().identity().rotateY((float) Math.toRadians(this.yaw))
+        .rotateX((float) Math.toRadians(this.pitch));
+  }
+
+  private void axis(InputState input, String plus, String minus, Vector3f direction) {
+    if (input.isActionDown(plus)) {
+      this.thrust.add(direction);
+    }
+    if (input.isActionDown(minus)) {
+      this.thrust.sub(direction);
+    }
+  }
+
+  /** Brings the view up to date with the world and reacts to what happened. */
+  private void afterStep(Engine engine, float dt) {
+    final var ship = this.world.ship();
+    final var p = this.camera.transform().position();
+    final boolean jumped = p.distanceSquared(ship.position) > World.ARENA * World.ARENA;
+    p.set(ship.position);
+    if (jumped) {
+      this.camera.transform().snapshot(); // flew through a wall, or came back in the middle
+    }
+    final var events = this.world.drainEvents();
+    this.view.play(events);
+    this.view.sync(this.world, ship.position, dt);
+    this.flash = Math.max(0f, this.flash - dt * 1.5f);
+    for (GameEvent e : events) {
+      switch (e) {
+      case GameEvent.WaveStarted w -> say("WAVE " + w.wave(), 2.5f);
+      case GameEvent.BossAppeared b -> say("ENEMY SHIP!", 2.5f);
+      case GameEvent.BossDestroyed b -> say("ENEMY SHIP DESTROYED  +" + World.BOSS_SCORE, 2.5f);
+      case GameEvent.BossLeft b -> say("The enemy ship left", 2f);
+      case GameEvent.ShipDestroyed s -> {
+        this.flash = 0.8f;
+        if (this.world.lives() > 0) {
+          say("SHIP LOST", World.RESPAWN_DELAY);
+        }
+      }
+      case GameEvent.GameOver g -> {
+        final boolean best = this.game.recordScore(g.score());
+        engine.states().push(new GameOverState(this.game, this, g.score(), best));
+      }
+      default -> {
+      }
+      }
+    }
+  }
+
+  private void say(String text, float seconds) {
+    this.message = text;
+    this.messageUntil = this.time + seconds;
+  }
+
+  @Override
+  public void draw(Engine engine, UiCanvas ui, int width, int height) {
+    if (this.flash > 0f) {
+      ui.drawRect(0f, 0f, width, height, 0.8f, 0.1f, 0.05f, this.flash * 0.45f);
+    }
+    if (this.world.isGameOver()) {
+      return; // the game-over screen takes over
+    }
+    final var ship = this.world.ship();
+    if (ship.alive) {
+      Hud.crosshair(ui, width, height);
+    }
+    Hud.text(ui, String.format(Locale.ROOT, "SCORE  %d", this.world.score()), 16f, 14f, 1.6f, 1f, 1f, 1f, 1f);
+    Hud.text(ui, "WAVE " + this.world.wave() + "    ROCKS " + this.world.asteroids().size(), 16f,
+        14f + ui.lineHeight(1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
+    final var lives = "SHIPS " + "▲ ".repeat(Math.max(0, this.world.lives())).trim();
+    Hud.text(ui, lives, width - ui.textWidth(lives, 1.6f) - 16f, 14f, 1.6f, 0.6f, 1f, 0.8f, 1f);
+    if (ship.alive && ship.invulnerable > 0f && ((int) (this.time * 6) % 2 == 0)) {
+      Hud.centered(ui, "SHIELD", width, height / 2f + 24f, 1.1f, 0.6f, 1f, 0.8f, 0.9f);
+    }
+    final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
+    Hud.text(ui, speed, 16f, height - ui.lineHeight(1.1f) - 14f, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
+
+    final var boss = this.world.boss();
+    if (boss != null) {
+      final var toBoss = World.delta(ship.position, boss.position, new Vector3f());
+      Hud.bossMarker(ui, width, height, toBoss, this.camera.transform().rotation(),
+          this.camera.get(Camera.class).fovDegrees, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()));
+    }
+    if (this.time < this.messageUntil) {
+      final float fade = Math.min(1f, (this.messageUntil - this.time) * 2f);
+      Hud.centered(ui, this.message, width, height * 0.28f, 2.2f, 1f, 0.9f, 0.5f, fade);
+    }
+  }
+}

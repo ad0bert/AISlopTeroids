@@ -1,0 +1,15 @@
+target/
+*.class
+*.log
+hs_err_pid*
+
+# IDEs
+.idea/
+*.iml
+.settings/
+.classpath
+.project
+.vscode/
+
+# the high score when there is no user data directory
+simple-astroids-scores.properties
