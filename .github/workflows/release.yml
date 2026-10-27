@@ -68,6 +68,9 @@ jobs:
           if [ "$RUNNER_OS" = Windows ]; then
             (cd target/jpackage && 7z a -bd "../../out/$name.zip" .)
           else
+            # the bundled runtime's legal files are read-only, so macOS's xattr -cr (to lift the download quarantine)
+            # fails on them with "Permission denied": make everything writable for its owner
+            chmod -R u+w target/jpackage
             tar -czf "out/$name.tar.gz" -C target/jpackage . # keeps the launcher executable
           fi
           if [ "$RUNNER_OS" = Linux ]; then # the runnable jar is the same everywhere: one copy is enough
