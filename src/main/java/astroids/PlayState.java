@@ -306,6 +306,7 @@ final class PlayState extends LevelState {
 
   @Override
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
+    Hud.screen(width, height);
     if (this.flash > 0f) {
       ui.drawRect(0f, 0f, width, height, 0.8f, 0.1f, 0.05f, this.flash * 0.45f);
     }
@@ -321,23 +322,23 @@ final class PlayState extends LevelState {
     }
     Hud.text(ui, String.format(Locale.ROOT, "SCORE  %d", this.world.score()), 16f, 14f, 1.6f, 1f, 1f, 1f, 1f);
     Hud.text(ui, "WAVE " + this.world.wave() + "    ROCKS " + this.world.asteroids().size() + "    "
-        + this.difficulty.label.toUpperCase(Locale.ROOT), 16f, 14f + ui.lineHeight(1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f,
+        + this.difficulty.label.toUpperCase(Locale.ROOT), 16f, 14f + Hud.lineHeight(ui, 1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f,
         1f);
     final int ships = Math.max(0, this.world.lives());
     final var lives = "SHIPS " + (ships > 6 ? "▲ x" + ships : "▲ ".repeat(ships).trim());
-    Hud.text(ui, lives, width - ui.textWidth(lives, 1.6f) - 16f, 14f, 1.6f, 0.6f, 1f, 0.8f, 1f);
+    Hud.text(ui, lives, width - Hud.width(ui, lives, 1.6f) - 16f, 14f, 1.6f, 0.6f, 1f, 0.8f, 1f);
     if (ship.alive && ship.invulnerable > 0f && ((int) (this.time * 6) % 2 == 0)) {
       Hud.centered(ui, "SHIELD", width, height / 2f + 24f, 1.1f, 0.6f, 1f, 0.8f, 0.9f);
     }
     if (this.custom) {
-      Hud.text(ui, "CUSTOM TUNING", 16f, 14f + ui.lineHeight(1.6f) + ui.lineHeight(1.1f) + 6f, 1f, 1f, 0.75f, 0.3f, 1f);
+      Hud.text(ui, "CUSTOM TUNING", 16f, 14f + Hud.lineHeight(ui, 1.6f) + Hud.lineHeight(ui, 1.1f) + 6f, 1f, 1f, 0.75f, 0.3f, 1f);
     }
     final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
-    final float bottom = height - ui.lineHeight(1.1f) - 14f;
+    final float bottom = height - Hud.lineHeight(ui, 1.1f) - 14f;
     Hud.text(ui, speed, 16f, bottom, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
     final float cooldown = ship.hyperspaceCooldown;
     final var jump = cooldown > 0f ? String.format(Locale.ROOT, "JUMP %.0f", Math.ceil(cooldown)) : "JUMP READY  (E)";
-    final float jumpX = 16f + ui.textWidth("SPEED 00", 1.1f) + 30f;
+    final float jumpX = 16f + Hud.width(ui, "SPEED 00", 1.1f) + 30f;
     if (cooldown > 0f) {
       Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.62f, 0.7f, 1f);
     } else {
