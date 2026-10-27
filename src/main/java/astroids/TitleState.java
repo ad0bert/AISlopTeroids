@@ -32,6 +32,11 @@ final class TitleState extends LevelState {
   }
 
   @Override
+  public void revealed(Engine engine) {
+    this.clicks = new Clicks(engine.input()); // clicks in the options panel must not start a game
+  }
+
+  @Override
   public void update(Engine engine, double dtD) {
     final float dt = (float) dtD;
     this.time += dt;
@@ -39,6 +44,10 @@ final class TitleState extends LevelState {
     this.view.sync(this.world, this.camera.transform().position(), dt);
     this.camera.transform().rotation().identity().rotateY(this.time * 0.05f).rotateX(0.15f * (float) Math.sin(
         this.time * 0.1f));
+    if (engine.input().wasActionPressed("options")) {
+      engine.states().push(new SettingsState(this.game));
+      return;
+    }
     final boolean clicked = this.clicks.clicked();
     if (engine.input().wasActionPressed("start") || clicked) {
       engine.captureMouse(true);
@@ -56,7 +65,7 @@ final class TitleState extends LevelState {
     Hud.centered(ui, "Press Enter or click to start", width, height * 0.5f, 1.6f, 1f, 1f, 1f, blink);
 
     final String[] help = { "Mouse  look       W / S  thrust forward / back       A / D  slide",
-        "Space / Shift  up / down       Left click or Ctrl  fire       P  pause       F11  fullscreen",
+        "Space / Shift  up / down       Left click or Ctrl  fire       P  pause       O  options       F11  fullscreen",
         "Big rocks split in two, small ones shatter. Watch out for the red ship: it shoots back." };
     float y = height * 0.66f;
     for (String line : help) {

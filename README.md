@@ -18,10 +18,14 @@ The graphics are kept as simple as possible: low-poly rocks, glowing shots, a st
 | Rise / sink | `Space` / `Shift` | |
 | Fire | left click or `Ctrl` (hold for rapid fire) | `RB`, `RT` or `A` |
 | Pause | `P` (or `Esc` to free the mouse) | `Start` |
+| Options | `O` on the title screen or in the pause menu | |
 | Fullscreen | `F11` | |
 | Debug text | `F3` | |
 
 The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
+
+The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, fullscreen, vsync and the
+radar. Changes take effect at once and are saved in your user config directory.
 
 ### Rules
 
@@ -32,6 +36,9 @@ The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
   for 1000. It leaves after 25 seconds. A red marker on screen shows where it is.
 - **Lives:** you have 3 ships. Touching a rock or the enemy ship, or being hit by its shot, costs one. The next ship
   appears in the middle after 2 seconds, shielded for 3 seconds. The best score is kept in your user data directory.
+- **Finding things:** the radar in the bottom right shows every rock and the enemy ship around you, seen from above
+  with your view pointing up. A line from each blip shows whether it is above or below you. When only three rocks are
+  left, each gets a marker on screen, or an arrow at the edge when it's behind you.
 - **Wrap-around:** the arena wraps around: what leaves on one side comes back on the other. Everything is drawn where
   it is nearest to you, so you never see a wall; space just goes on.
 
@@ -60,7 +67,8 @@ java -jar target/dist/simple-astroids.jar
 mvn package -Pjpackage                   # also target/jpackage: the game with its own Java runtime
 ```
 
-`-Dastroids.autopilot=true` starts straight in a game that flies and shoots by itself, which is handy for screenshots.
+`-Dastroids.autopilot=true` starts straight in a game that flies and shoots by itself, and `-Dastroids.showOptions=true`
+opens the options panel at start. Both are handy for screenshots.
 The engine's system properties (`engine.fullscreen`, `engine.vsync`, `engine.screenshot`, ...) work too. CI runs the
 title screen and an autopilot game under Xvfb and keeps the screenshots as an artifact.
 
@@ -72,4 +80,5 @@ title screen and an autopilot game under Xvfb and keeps the screenshots as an ar
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. |
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds, made once at start-up. |
-| `Hud` | Text, crosshair, and the marker that points to the enemy ship. |
+| `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, and the radar. |
+| `Options`, `SettingsState` | The player's options (saved with the engine's `Settings`) and the panel that edits them (engine `Gui`). |
