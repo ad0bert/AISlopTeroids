@@ -116,7 +116,7 @@ final class WorldView {
 
   private Entity newAsteroid(Asteroid a) {
     final var e = new Entity(a.size == Asteroid.Size.BIG ? "big rock" : "small rock");
-    e.add(new MeshRenderer(this.art.rock,
+    e.add(new MeshRenderer(this.art.rocks[Math.floorMod(a.variant, this.art.rocks.length)],
         a.size == Asteroid.Size.BIG ? this.art.rockMaterial : this.art.smallRockMaterial));
     e.transform().scale().set(a.shape).mul(a.radius());
     shown(a.position, e.transform().position());

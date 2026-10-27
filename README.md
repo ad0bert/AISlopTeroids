@@ -5,8 +5,9 @@ The classic Asteroids as a 3D first-person game, built on
 around on every side. Big rocks split in two when shot, small ones shatter, and now and then an enemy ship shows up
 and shoots at you. Pick Easy, Normal or Hard on the title screen; each keeps its own table of the ten best games.
 
-The graphics are kept as simple as possible: low-poly rocks, glowing shots, a star field, flat colours. Everything
-(meshes, sounds) is generated in code; the repository has no asset files.
+The graphics are kept simple: lumpy, cratered rocks (twelve different shapes) with a rock texture and a bump map,
+glowing shots, a star field, flat colours. Everything (meshes, textures, sounds) is generated in code; the repository
+has no asset files.
 
 ## Play
 
@@ -125,6 +126,7 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 | `astroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, enemy ships, ship, waves, score) steps by a fixed time step and reports `GameEvent`s, with its numbers from a `Tuning` (a `Difficulty`'s values, plus `tuning.properties`). Deterministic for a seed and a tuning, and unit-tested. |
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. `GameOverState` takes the name for the score table. |
+| `RockArt` | The rocks' shapes (a sphere pushed in and out by random lumps and craters, one per seed) and their surface: a seamless height field turned into a colour texture and a bump map. |
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds (effects and seamless ambience loops), made once at start-up. |
 | `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, score tables, and the radar. |
 | `HighScores` | The ten best games of each difficulty, kept in the scores file. |

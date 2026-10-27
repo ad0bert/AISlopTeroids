@@ -21,6 +21,8 @@ public final class Asteroid {
   public final Vector3f spinAxis = new Vector3f(0f, 1f, 0f);
   public float spinSpeed;
   public final Vector3f shape = new Vector3f(1f);
+  /** For the view: which of its rock shapes this one has (any number; the view takes it modulo how many it has). */
+  public int variant;
 
   public Asteroid(Size size) {
     this.size = size;

@@ -368,6 +368,7 @@ public final class World {
     randomDirection(a.spinAxis);
     a.spinSpeed = between(0.2f, 1.2f);
     a.shape.set(between(0.8f, 1.2f), between(0.75f, 1.1f), between(0.85f, 1.25f));
+    a.variant = this.random.nextInt(1 << 16);
   }
 
   /** Splits a big asteroid in two or removes a small one, and scores it. */

@@ -25,14 +25,20 @@ import engine.audio.AudioListener;
  * colours, glowing shots and synthesized sounds. Created outside any level, so it lives as long as the game.
  */
 final class Art {
-  final GpuMesh rock;
+  /** Rock shapes, all different; each asteroid gets one ({@link astroids.model.Asteroid#variant}). */
+  final GpuMesh[] rocks = new GpuMesh[ROCK_SHAPES];
   final GpuMesh ball;
   final GpuMesh cube;
   final GpuMesh stars;
   final GpuMesh brightStars;
 
-  final Material rockMaterial = new Material().color(0.48f, 0.44f, 0.40f, 1f);
-  final Material smallRockMaterial = new Material().color(0.58f, 0.50f, 0.42f, 1f);
+  /** How many different rock shapes there are. */
+  static final int ROCK_SHAPES = 12;
+  /** The seed of the first rock shape; the others follow it. */
+  static final long ROCK_SEED = 1000L;
+
+  final Material rockMaterial = new Material().color(0.62f, 0.58f, 0.54f, 1f);
+  final Material smallRockMaterial = new Material().color(0.74f, 0.64f, 0.54f, 1f);
   final Material shotMaterial = glowing(1.8f, 1.5f, 0.5f);
   final Material bossShotMaterial = glowing(2.2f, 0.25f, 0.7f);
   final Material bossHull = new Material().color(0.55f, 0.57f, 0.62f, 1f);
@@ -60,7 +66,18 @@ final class Art {
 
   Art(Engine engine) {
     final var res = engine.resources();
-    this.rock = res.mesh(MeshFactory.sphere(1f, 9, 6)); // few faces: rough and simple
+    for (int i = 0; i < this.rocks.length; i++) {
+      this.rocks[i] = res.mesh("gen:rock-" + i, RockArt.mesh(ROCK_SEED + i));
+    }
+    // one rock surface for all of them: a colour texture and a bump map from the same heights
+    final float[] heights = RockArt.heights(RockArt.TEXTURE_SIZE, 7L);
+    final var rockTexture = res.texture("gen:rock-albedo", RockArt.albedo(heights, RockArt.TEXTURE_SIZE, 8L));
+    final var rockBumps = res.texture("gen:rock-normals", RockArt.normals(heights, RockArt.TEXTURE_SIZE));
+    for (var m : List.of(this.rockMaterial, this.smallRockMaterial)) {
+      m.texture = rockTexture;
+      m.normalMap = rockBumps;
+      m.uvScale.set(2f, 1f); // twice round the rock, once from pole to pole: about square
+    }
     this.ball = res.mesh(MeshFactory.sphere(1f, 10, 6));
     this.cube = res.mesh(MeshFactory.cube(1f));
     this.stars = res.mesh(MeshFactory.points(starField(1400, 1L)));
