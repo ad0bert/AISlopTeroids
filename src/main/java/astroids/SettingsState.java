@@ -7,7 +7,8 @@ import engine.ui.Gui;
 
 /**
  * The options panel, opened with O from the title screen or the pause menu: mouse sensitivity, inverted look, volumes,
- * fullscreen, vsync and the radar. Changes take effect at once and are saved when the panel closes (Done, or O again).
+ * fullscreen, vsync, graphics quality, the radar and the cockpit. Changes take effect at once and are saved when the
+ * panel closes (Done, or O again).
  */
 final class SettingsState implements GameState {
   private static final float PANEL_WIDTH = 380f;
@@ -66,7 +67,12 @@ final class SettingsState implements GameState {
     g.row(2);
     o.fullscreen = g.checkbox("Fullscreen", o.fullscreen);
     o.vsync = g.checkbox("VSync", o.vsync);
+    if (g.button("Graphics quality: " + o.quality.label)) {
+      o.quality = o.quality.next();
+    }
+    g.row(2);
     o.radar = g.checkbox("Show the radar", o.radar);
+    o.cockpit = g.checkbox("Show the cockpit", o.cockpit);
     g.space(10f);
     g.row(2);
     if (g.button("Defaults")) {
@@ -74,6 +80,7 @@ final class SettingsState implements GameState {
       defaults.fullscreen = o.fullscreen; // the window stays as it is
       defaults.vsync = o.vsync;
       defaults.difficulty = o.difficulty; // picked on the title screen, not here
+      defaults.quality = o.quality; // the computer is the same
       this.game.replaceOptions(defaults);
     }
     if (g.button("Done")) {
@@ -81,7 +88,7 @@ final class SettingsState implements GameState {
     }
     g.endPanel();
     g.end();
-    this.game.options().apply(engine);
+    this.game.applyOptions(engine);
     Hud.centered(ui, "O or Done to close", width, height * 0.9f, 1.1f, 0.8f, 0.8f, 0.85f, 1f);
   }
 }

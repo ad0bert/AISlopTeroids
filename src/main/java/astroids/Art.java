@@ -53,6 +53,10 @@ final class Art {
   final Material bossShotMaterial = glowing(2.2f, 0.25f, 0.7f);
   // the enemy ships: polished metal that reflects the space around it, glossy paint, glowing glass and lights
   final Material bossHull = new Material().color(0.92f, 0.93f, 0.96f, 1f).pbr(0.85f, 0.28f);
+  // the player's ship: worn chrome and teal paint, the colour of the HUD
+  final Material playerHull = new Material().color(0.9f, 0.92f, 0.95f, 1f).pbr(0.85f, 0.28f);
+  final Material playerPaint = new Material().color(0.1f, 0.5f, 0.42f, 1f).pbr(0f, 0.2f);
+  final Material playerFrame = new Material().color(0.2f, 0.21f, 0.24f, 1f).pbr(0.7f, 0.45f);
   final Material bossPaint = new Material().color(0.55f, 0.03f, 0.02f, 1f).pbr(0f, 0.22f);
   final Material bossDome = glass(0.45f, 0.03f, 0.02f, 0.35f, 0.04f, 0.02f);
   final Material bossLight = glowing(2.6f, 0.35f, 0.2f);
@@ -62,6 +66,7 @@ final class Art {
   final Material scoutLight = glowing(2.6f, 1.9f, 0.3f);
   final Material whiteLight = glowing(2.4f, 2.4f, 2.3f);
   final Material engineGlow = glowing(2.4f, 0.8f, 0.25f);
+  final Material cockpitLight = glowing(0.6f, 1.6f, 1.2f);
 
   /** One piece of a ship: where it sits on the ship (which has a scale of its radius), and how it looks. */
   record Part(GpuMesh mesh, Material material, Vector3f position, Quaternionf rotation, Vector3f scale) {
@@ -70,6 +75,10 @@ final class Art {
   /** The big enemy ship and the scout, as parts. */
   final List<Part> bossParts = new ArrayList<>();
   final List<Part> scoutParts = new ArrayList<>();
+  /** The player's ship as seen from inside, in camera space (the camera looks along -z): nose, dashboard, struts. */
+  final List<Part> cockpitParts = new ArrayList<>();
+  /** The graphics quality in force (set with the options): how much the bursts make. */
+  Quality quality = Quality.HIGH;
   final Material fire = glowing(2.4f, 1.1f, 0.2f);
   final Material starMaterial = new Material().color(0.75f, 0.78f, 0.85f, 1f).unlit();
   final Material brightStarMaterial = new Material().color(1f, 1f, 1f, 1f).unlit();
@@ -117,10 +126,12 @@ final class Art {
     this.smallRockMaterial.specular = 0.05f;
     this.bossPaint.reflectance = 0.06f;
     this.scoutHull.reflectance = 0.06f;
+    this.playerPaint.reflectance = 0.06f;
     // the sky is kept dark behind the game; the ships take more of its light, so their polish shows
-    for (var m : List.of(this.bossHull, this.bossPaint, this.scoutFin)) {
+    for (var m : List.of(this.bossHull, this.bossPaint, this.scoutFin, this.playerHull, this.playerFrame)) {
       m.ambient.set(3f);
     }
+    this.playerPaint.ambient.set(2f);
     this.scoutHull.ambient.set(1.5f); // paint: its colour takes the sky's light too, not only its gloss
     buildShips(res);
     this.starMaterial.pointSize = 1.5f;
@@ -184,7 +195,8 @@ final class Art {
     final var wearColour = res.texture("gen:wear-albedo", wear.albedo());
     final var wearShine = res.texture("gen:wear-metal-rough", wear.metalRough());
     final var wearBumps = res.texture("gen:wear-normals", wear.normals());
-    for (var m : List.of(this.bossHull, this.bossPaint, this.scoutHull, this.scoutFin)) {
+    for (var m : List.of(this.bossHull, this.bossPaint, this.scoutHull, this.scoutFin, this.playerHull,
+        this.playerPaint, this.playerFrame)) {
       m.texture = wearColour;
       m.metalRoughMap = wearShine;
       m.normalMap = wearBumps;
@@ -227,10 +239,40 @@ final class Art {
       final var at = new Quaternionf().rotateY(a).transform(new Vector3f(0.95f, 0.03f, 0f));
       this.scoutParts.add(new Part(this.cube, this.scoutFin, at, turn, new Vector3f(0.34f, 0.03f, 0.1f)));
     }
+    buildCockpit(res);
     for (int i = 0; i < 6; i++) {
       final double a = 2 * Math.PI * (i + 0.5) / 6;
       this.scoutParts.add(new Part(this.ball, this.scoutLight,
           new Vector3f((float) Math.cos(a) * 0.98f, 0.01f, (float) -Math.sin(a) * 0.98f), none, new Vector3f(0.04f)));
+    }
+  }
+
+  /**
+   * The cockpit, in camera space: the nose of the ship pointing ahead below the crosshair, the edge of the dashboard
+   * across the bottom of the view with a few lights, and the canopy's struts at the sides.
+   */
+  private void buildCockpit(engine.resources.ResourceManager res) {
+    final var nose = res.mesh("gen:nose", ShipArt.lathe(ShipArt.NOSE, 32));
+    final var ahead = new Quaternionf().rotateX((float) Math.toRadians(-90)); // the lathe's +y to the view's -z
+    this.cockpitParts.add(new Part(nose, this.playerPaint, new Vector3f(0f, -0.66f, -0.8f),
+        new Quaternionf(ahead).rotateX((float) Math.toRadians(-3)), new Vector3f(0.75f, 0.85f, 0.4f)));
+    // the dashboard: a wide panel along the bottom edge, its near edge tilted up towards the pilot (a cube's
+    // scale is half its size)
+    final var tilt = new Quaternionf().rotateX((float) Math.toRadians(-14));
+    this.cockpitParts.add(new Part(this.cube, this.playerFrame, new Vector3f(0f, -0.5f, -0.62f), tilt,
+        new Vector3f(1.3f, 0.03f, 0.2f)));
+    this.cockpitParts.add(new Part(this.cube, this.playerPaint, new Vector3f(0f, -0.455f, -0.48f), tilt,
+        new Vector3f(1.3f, 0.012f, 0.012f)));
+    for (int i = 0; i < 4; i++) {
+      final float x = (i < 2 ? -1 : 1) * (0.42f + 0.1f * (i % 2));
+      this.cockpitParts.add(new Part(this.cube, i % 2 == 0 ? this.cockpitLight : this.whiteLight,
+          new Vector3f(x, -0.465f, -0.56f), tilt, new Vector3f(0.025f, 0.008f, 0.015f)));
+    }
+    // the canopy's struts: thin, at the sides, leaning in
+    for (int side = -1; side <= 1; side += 2) {
+      final var lean = new Quaternionf().rotateZ((float) Math.toRadians(-side * 16));
+      this.cockpitParts.add(new Part(this.cube, this.playerFrame, new Vector3f(side * 1.12f, 0f, -0.85f), lean,
+          new Vector3f(0.025f, 0.8f, 0.025f)));
     }
   }
 

@@ -31,7 +31,16 @@ has no asset files.
 The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
 
 The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, ambience volume, fullscreen,
-vsync and the radar. Changes take effect at once and are saved in your user config directory.
+vsync, graphics quality, the radar and the cockpit. Changes take effect at once and are saved in your user config
+directory.
+
+You look out of your ship's cockpit: its nose below the crosshair, the dashboard along the bottom, the canopy's struts
+at the sides (switch it off in the options for a clear view). When your ship is hit, the view pulls back and you watch
+it break up; the next ship brings you back into the cockpit.
+
+Graphics quality (Low, Medium, High) is for slower computers: Medium blends see-through things more simply and makes
+fewer pieces, specks and sparks in explosions; Low also turns off the glow (bloom), edge smoothing and the light of
+explosions, and makes fewer pieces still. The reflections on the ships stay at every level.
 
 Ambience: the title screen has a warm, breathing pad with a soft, low synth arpeggio inside it. In the game, a darker drone plays under the engine hum, which rises
 with your speed, and a low throb swells while an enemy ship is around.
@@ -132,4 +141,5 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds (effects and seamless ambience loops), made once at start-up. |
 | `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, score tables, and the radar. |
 | `HighScores` | The ten best games of each difficulty, kept in the scores file. |
+| `Quality` | The graphics quality levels: what each switches in the renderer, and how much of the bursts it keeps. |
 | `Options`, `SettingsState` | The player's options (saved with the engine's `Settings`) and the panel that edits them (engine `Gui`). |
