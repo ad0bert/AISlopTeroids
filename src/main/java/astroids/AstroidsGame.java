@@ -11,6 +11,7 @@ import com.jogamp.newt.event.KeyEvent;
 import engine.core.Engine;
 import engine.core.Game;
 import engine.core.Settings;
+import astroids.model.Tuning;
 import engine.input.Gamepad;
 
 /**
@@ -23,6 +24,8 @@ public final class AstroidsGame implements Game {
   private Settings scores;
   private Settings settings;
   private Options options;
+  private Path tuningFile;
+  private Tuning.Loaded tuning = new Tuning.Loaded(new Tuning(), 0, java.util.List.of());
 
   @Override
   public void init(Engine engine) {
@@ -42,6 +45,13 @@ public final class AstroidsGame implements Game {
     this.settings = Settings.load(settingsFile(engine));
     this.options = Options.load(this.settings, engine.isFullscreen(), engine.isVsync());
     this.options.apply(engine);
+    this.tuningFile = settingsFile(engine).resolveSibling("tuning.properties");
+    try {
+      Tuning.writeExample(this.tuningFile.resolveSibling("tuning.example.properties"));
+    } catch (IOException e) {
+      log.warn("Could not write the tuning example: {}", e.getMessage());
+    }
+    loadTuning();
     engine.setDebugOverlayVisible(false); // it would cover the HUD; F3 still shows it
     // -Dastroids.autopilot=true: straight into a game that flies itself (screenshots, smoke tests)
     engine.states().push(Boolean.getBoolean("astroids.autopilot") ? new PlayState(this) : new TitleState(this));
@@ -79,6 +89,33 @@ public final class AstroidsGame implements Game {
     } catch (IOException e) {
       log.warn("Could not save the options to {}: {}", this.settings.file(), e.getMessage());
     }
+  }
+
+  /**
+   * Reads {@code tuning.properties} from the config directory (again: every new game picks up edits) and logs what in
+   * it could not be used.
+   */
+  Tuning.Loaded loadTuning() {
+    try {
+      this.tuning = Tuning.load(this.tuningFile);
+    } catch (IOException | IllegalArgumentException e) {
+      log.warn("Could not read {}: {}; playing with the defaults", this.tuningFile, e.getMessage());
+      this.tuning = new Tuning.Loaded(new Tuning(), 0, java.util.List.of("could not read the file: " + e.getMessage()));
+    }
+    if (this.tuning.custom()) {
+      log.info("Custom tuning from {}: {} values changed", this.tuningFile, this.tuning.overrides());
+    }
+    this.tuning.problems().forEach(p -> log.warn("{}: {}", this.tuningFile.getFileName(), p));
+    return this.tuning;
+  }
+
+  /** The tuning last loaded (at start, or for the latest game). */
+  Tuning.Loaded tuning() {
+    return this.tuning;
+  }
+
+  Path tuningFile() {
+    return this.tuningFile;
   }
 
   int highScore() {

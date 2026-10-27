@@ -13,58 +13,23 @@ import org.joml.Vector3f;
  *
  * <ul>
  * <li>A big asteroid that is hit splits into two small ones; a small one is destroyed.</li>
- * <li>The boss shoots at the player, takes {@value #BOSS_HEALTH} hits, and leaves after {@value #BOSS_STAY}
- * seconds.</li>
+ * <li>The boss shoots at the player, takes a few hits, and leaves after a while.</li>
  * <li>Touching an asteroid or the boss, or being hit by a boss bullet, costs a life; the ship comes back in the middle
- * after {@value #RESPAWN_DELAY} seconds and is safe for {@value #INVULNERABLE_TIME} seconds.</li>
+ * after a moment and is shielded for a few seconds.</li>
  * <li>When no asteroids are left, the next wave starts with one more big asteroid.</li>
  * </ul>
  *
- * {@link #step} advances everything by a fixed time step; the events of the step are collected for sounds and effects.
- * Deterministic for a given seed.
+ * The numbers (speeds, timings, counts, scores) come from a {@link Tuning}. {@link #step} advances everything by a
+ * fixed time step; the events of the step are collected for sounds and effects. Deterministic for a seed and a tuning.
  */
 public final class World {
-  /** Half the edge of the arena cube: positions stay within -ARENA..ARENA on every axis. */
-  public static final float ARENA = 60f;
   public static final float BIG_RADIUS = 5f;
   public static final float SMALL_RADIUS = 2.5f;
-  public static final int BIG_SCORE = 20;
-  public static final int SMALL_SCORE = 50;
-
   public static final float SHIP_RADIUS = 1f;
-  public static final float SHIP_ACCELERATION = 30f;
-  public static final float SHIP_MAX_SPEED = 25f;
-  /** How fast the ship coasts to a stop without thrust (per second, exponential). */
-  public static final float SHIP_DAMPING = 0.8f;
-  public static final int START_LIVES = 3;
-  public static final float RESPAWN_DELAY = 2f;
-  public static final float INVULNERABLE_TIME = 3f;
-
-  public static final float BULLET_SPEED = 70f;
-  public static final float BULLET_TIME = 1.1f;
-  public static final float FIRE_INTERVAL = 0.16f;
   public static final float BULLET_RADIUS = 0.3f;
-
   public static final float BOSS_RADIUS = 2f;
-  public static final int BOSS_HEALTH = 3;
-  public static final int BOSS_HIT_SCORE = 100;
-  public static final int BOSS_SCORE = 1000;
-  public static final float BOSS_SPEED = 9f;
-  public static final float BOSS_STAY = 25f;
-  public static final float BOSS_FIRE_INTERVAL = 1.4f;
-  public static final float BOSS_BULLET_SPEED = 32f;
-  public static final float BOSS_BULLET_TIME = 3f;
-  /** How far off (radians) the boss's aim may be. */
-  public static final float BOSS_SPREAD = 0.06f;
-  /** Seconds between one boss leaving (or dying) and the next arriving. */
-  public static final float BOSS_MIN_DELAY = 20f;
-  public static final float BOSS_MAX_DELAY = 35f;
 
-  public static final float WAVE_DELAY = 2.5f;
-  public static final int MAX_BIG_ASTEROIDS = 12;
-  /** New asteroids appear at least this far from the ship. */
-  public static final float SAFE_DISTANCE = 25f;
-
+  private final Tuning t;
   private final Random random;
   private final List<Asteroid> asteroids = new ArrayList<>();
   private final List<Bullet> bullets = new ArrayList<>();
@@ -74,29 +39,36 @@ public final class World {
   private float bossDelay;
   private float nextWaveIn = -1f;
   private int score;
-  private int lives = START_LIVES;
+  private int lives;
   private int wave;
   private boolean gameOver;
 
   private final Vector3f tmp = new Vector3f();
   private final Vector3f tmp2 = new Vector3f();
 
-  private World(long seed, boolean withShip) {
+  private World(long seed, boolean withShip, Tuning tuning) {
+    this.t = tuning;
     this.random = new Random(seed);
     this.ship = withShip ? new Ship() : null;
-    this.bossDelay = withShip ? between(BOSS_MIN_DELAY, BOSS_MAX_DELAY) : Float.POSITIVE_INFINITY;
+    this.lives = tuning.lives;
+    this.bossDelay = withShip ? between(tuning.enemyMinDelay, tuning.enemyMaxDelay) : Float.POSITIVE_INFINITY;
   }
 
-  /** A new game: the ship in the middle, the first wave around it. */
+  /** A new game as released: the ship in the middle, the first wave around it. */
   public static World newGame(long seed) {
-    final var w = new World(seed, true);
+    return newGame(seed, new Tuning());
+  }
+
+  /** A new game with other numbers (playtesting). */
+  public static World newGame(long seed, Tuning tuning) {
+    final var w = new World(seed, true, tuning);
     w.startWave(1);
     return w;
   }
 
   /** Asteroids drifting about with no ship and no boss, for the title screen. */
   public static World attract(long seed, int asteroids) {
-    final var w = new World(seed, false);
+    final var w = new World(seed, false, new Tuning());
     for (int i = 0; i < asteroids; i++) {
       w.spawnBig();
     }
@@ -122,6 +94,15 @@ public final class World {
   /** The boss, or null while there is none. */
   public Boss boss() {
     return this.boss;
+  }
+
+  public Tuning tuning() {
+    return this.t;
+  }
+
+  /** Half the edge of the arena cube: positions stay within -arena..arena on every axis. */
+  public float arena() {
+    return this.t.arena;
   }
 
   public int score() {
@@ -181,7 +162,7 @@ public final class World {
         s.alive = true;
         s.position.zero();
         s.velocity.zero();
-        s.invulnerable = INVULNERABLE_TIME;
+        s.invulnerable = this.t.shieldTime;
         this.events.add(new GameEvent.ShipRespawned());
       }
       return;
@@ -189,23 +170,23 @@ public final class World {
     s.invulnerable = Math.max(0f, s.invulnerable - dt);
     final float thrust = Math.min(1f, c.thrust().length());
     if (thrust > 0f) {
-      s.velocity.fma(SHIP_ACCELERATION * dt * thrust / c.thrust().length(), c.thrust());
+      s.velocity.fma(this.t.shipAcceleration * dt * thrust / c.thrust().length(), c.thrust());
     }
-    s.velocity.mul((float) Math.exp(-SHIP_DAMPING * dt));
-    if (s.velocity.length() > SHIP_MAX_SPEED) {
-      s.velocity.normalize(SHIP_MAX_SPEED);
+    s.velocity.mul((float) Math.exp(-this.t.shipDamping * dt));
+    if (s.velocity.length() > this.t.shipMaxSpeed) {
+      s.velocity.normalize(this.t.shipMaxSpeed);
     }
     s.position.fma(dt, s.velocity);
     wrap(s.position);
 
     s.fireCooldown -= dt;
     if (c.fire() && s.fireCooldown <= 0f) {
-      s.fireCooldown = FIRE_INTERVAL;
+      s.fireCooldown = this.t.fireInterval;
       final var aim = this.tmp.set(c.aim()).normalize();
       final var b = new Bullet(false);
       b.position.set(s.position).fma(SHIP_RADIUS + 0.5f, aim);
-      b.velocity.set(aim).mul(BULLET_SPEED).add(s.velocity);
-      b.timeLeft = BULLET_TIME;
+      b.velocity.set(aim).mul(this.t.bulletSpeed).add(s.velocity);
+      b.timeLeft = this.t.bulletTime;
       this.bullets.add(b);
       this.events.add(new GameEvent.Shot(new Vector3f(b.position)));
     }
@@ -226,30 +207,31 @@ public final class World {
     b.timeLeft -= dt;
     if (b.timeLeft <= 0f) {
       this.boss = null;
-      this.bossDelay = between(BOSS_MIN_DELAY, BOSS_MAX_DELAY);
+      this.bossDelay = between(this.t.enemyMinDelay, this.t.enemyMaxDelay);
       this.events.add(new GameEvent.BossLeft());
       return;
     }
     b.turnTimer -= dt;
     if (b.turnTimer <= 0f) {
       b.turnTimer = between(1.5f, 3f);
-      randomDirection(b.velocity).mul(BOSS_SPEED);
+      randomDirection(b.velocity).mul(this.t.enemySpeed);
     }
     b.position.fma(dt, b.velocity);
     wrap(b.position);
     b.fireTimer -= dt;
     if (b.fireTimer <= 0f && this.ship != null && this.ship.alive && !this.gameOver) {
-      b.fireTimer = BOSS_FIRE_INTERVAL;
+      b.fireTimer = this.t.enemyFireInterval;
       final var aim = delta(b.position, this.ship.position, this.tmp).normalize();
       // a little off, so that moving keeps the player safe
       final var off = randomDirection(this.tmp2).cross(aim);
       if (off.lengthSquared() > 1e-6f) {
-        aim.fma((float) Math.tan(BOSS_SPREAD) * this.random.nextFloat(), off.normalize()).normalize();
+        final float spread = (float) Math.tan(Math.toRadians(this.t.enemyAimErrorDegrees));
+        aim.fma(spread * this.random.nextFloat(), off.normalize()).normalize();
       }
       final var shot = new Bullet(true);
       shot.position.set(b.position).fma(BOSS_RADIUS + 0.5f, aim);
-      shot.velocity.set(aim).mul(BOSS_BULLET_SPEED);
-      shot.timeLeft = BOSS_BULLET_TIME;
+      shot.velocity.set(aim).mul(this.t.enemyBulletSpeed);
+      shot.timeLeft = this.t.enemyBulletTime;
       this.bullets.add(shot);
       this.events.add(new GameEvent.BossShot(new Vector3f(shot.position)));
     }
@@ -287,10 +269,10 @@ public final class World {
         breakAsteroid(rock, true);
         destroyShip();
       } else if (this.boss != null && touches(this.ship.position, SHIP_RADIUS, this.boss.position, BOSS_RADIUS)) {
-        this.score += BOSS_SCORE;
+        this.score += this.t.scoreEnemyDestroyed;
         this.events.add(new GameEvent.BossDestroyed(new Vector3f(this.boss.position)));
         this.boss = null;
-        this.bossDelay = between(BOSS_MIN_DELAY, BOSS_MAX_DELAY);
+        this.bossDelay = between(this.t.enemyMinDelay, this.t.enemyMaxDelay);
         destroyShip();
       }
     }
@@ -301,7 +283,7 @@ public final class World {
       return;
     }
     if (this.nextWaveIn < 0f) {
-      this.nextWaveIn = WAVE_DELAY;
+      this.nextWaveIn = this.t.waveDelay;
     }
     this.nextWaveIn -= dt;
     if (this.nextWaveIn <= 0f) {
@@ -312,7 +294,7 @@ public final class World {
 
   private void startWave(int number) {
     this.wave = number;
-    final int count = Math.min(MAX_BIG_ASTEROIDS, 3 + number);
+    final int count = Math.min(this.t.maxRocks, this.t.firstWaveRocks + number - 1);
     for (int i = 0; i < count; i++) {
       spawnBig();
     }
@@ -322,9 +304,10 @@ public final class World {
   private void spawnBig() {
     final var a = new Asteroid(Asteroid.Size.BIG);
     do {
-      a.position.set(between(-ARENA, ARENA), between(-ARENA, ARENA), between(-ARENA, ARENA));
-    } while (this.ship != null && distance(a.position, this.ship.position) < SAFE_DISTANCE);
-    randomDirection(a.velocity).mul(between(3f, 6f) + 0.4f * Math.max(0, this.wave - 1));
+      a.position.set(between(-arena(), arena()), between(-arena(), arena()), between(-arena(), arena()));
+    } while (this.ship != null && distance(a.position, this.ship.position) < this.t.safeDistance);
+    randomDirection(a.velocity).mul(between(this.t.rockMinSpeed, this.t.rockMaxSpeed)
+        + this.t.rockSpeedPerWave * Math.max(0, this.wave - 1));
     decorate(a);
     this.asteroids.add(a);
   }
@@ -339,13 +322,13 @@ public final class World {
   private void breakAsteroid(Asteroid a, boolean scored) {
     this.asteroids.remove(a);
     if (scored) {
-      this.score += a.size.score;
+      this.score += a.size == Asteroid.Size.BIG ? this.t.scoreBigRock : this.t.scoreSmallRock;
     }
     this.events.add(new GameEvent.AsteroidDestroyed(new Vector3f(a.position), a.size));
     if (a.size == Asteroid.Size.BIG) {
       // the two halves fly apart across the parent's path
       final var apart = randomDirection(this.tmp2);
-      final float speed = between(4f, 7f);
+      final float speed = between(this.t.splitMinSpeed, this.t.splitMaxSpeed);
       for (int side = -1; side <= 1; side += 2) {
         final var piece = new Asteroid(Asteroid.Size.SMALL);
         piece.position.set(a.position).fma(side * SMALL_RADIUS * 1.1f, apart);
@@ -361,26 +344,27 @@ public final class World {
     final var b = this.boss;
     b.health--;
     if (b.health > 0) {
-      this.score += BOSS_HIT_SCORE;
+      this.score += this.t.scoreEnemyHit;
       this.events.add(new GameEvent.BossHit(new Vector3f(b.position)));
       return;
     }
-    this.score += BOSS_SCORE;
+    this.score += this.t.scoreEnemyDestroyed;
     this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position)));
     this.boss = null;
-    this.bossDelay = between(BOSS_MIN_DELAY, BOSS_MAX_DELAY);
+    this.bossDelay = between(this.t.enemyMinDelay, this.t.enemyMaxDelay);
   }
 
   private void spawnBoss() {
     final var b = new Boss();
     // on a face of the arena, as far as possible from the ship
     do {
-      b.position.set(between(-ARENA, ARENA), between(-ARENA, ARENA), between(-ARENA, ARENA));
+      b.position.set(between(-arena(), arena()), between(-arena(), arena()), between(-arena(), arena()));
       final int axis = this.random.nextInt(3);
-      b.position.setComponent(axis, this.random.nextBoolean() ? ARENA : -ARENA);
-    } while (this.ship != null && distance(b.position, this.ship.position) < SAFE_DISTANCE);
-    b.timeLeft = BOSS_STAY;
-    b.fireTimer = BOSS_FIRE_INTERVAL;
+      b.position.setComponent(axis, this.random.nextBoolean() ? arena() : -arena());
+    } while (this.ship != null && distance(b.position, this.ship.position) < this.t.safeDistance);
+    b.health = this.t.enemyHealth;
+    b.timeLeft = this.t.enemyStay;
+    b.fireTimer = this.t.enemyFireInterval;
     this.boss = b;
     this.events.add(new GameEvent.BossAppeared(new Vector3f(b.position)));
   }
@@ -388,7 +372,7 @@ public final class World {
   private void destroyShip() {
     final var s = this.ship;
     s.alive = false;
-    s.respawnIn = RESPAWN_DELAY;
+    s.respawnIn = this.t.respawnDelay;
     s.velocity.zero();
     this.lives--;
     this.events.add(new GameEvent.ShipDestroyed(new Vector3f(s.position)));
@@ -414,33 +398,42 @@ public final class World {
     return delta(a, b, this.tmp2.zero()).lengthSquared() <= r * r;
   }
 
-  /** The shortest way from a to b, going through the arena's walls if that is shorter. */
-  public static Vector3f delta(Vector3f from, Vector3f to, Vector3f dest) {
+  /** The shortest way from a to b in this arena, going through its walls if that is shorter. */
+  public Vector3f delta(Vector3f from, Vector3f to, Vector3f dest) {
+    return delta(from, to, dest, arena());
+  }
+
+  public float distance(Vector3f a, Vector3f b) {
+    return delta(a, b, new Vector3f()).length();
+  }
+
+  /** Moves a point that left the arena back in from the opposite side. */
+  public void wrap(Vector3f p) {
+    wrap(p, arena());
+  }
+
+  /** The shortest way from a to b in an arena of half-size {@code arena}. */
+  public static Vector3f delta(Vector3f from, Vector3f to, Vector3f dest, float arena) {
     dest.set(to).sub(from);
     for (int i = 0; i < 3; i++) {
       float d = dest.get(i);
-      if (d > ARENA) {
-        d -= 2f * ARENA;
-      } else if (d < -ARENA) {
-        d += 2f * ARENA;
+      if (d > arena) {
+        d -= 2f * arena;
+      } else if (d < -arena) {
+        d += 2f * arena;
       }
       dest.setComponent(i, d);
     }
     return dest;
   }
 
-  public static float distance(Vector3f a, Vector3f b) {
-    return delta(a, b, new Vector3f()).length();
-  }
-
-  /** Moves a point that left the arena back in from the opposite side. */
-  public static void wrap(Vector3f p) {
+  public static void wrap(Vector3f p, float arena) {
     for (int i = 0; i < 3; i++) {
       float v = p.get(i);
-      if (v > ARENA) {
-        v -= 2f * ARENA;
-      } else if (v < -ARENA) {
-        v += 2f * ARENA;
+      if (v > arena) {
+        v -= 2f * arena;
+      } else if (v < -arena) {
+        v += 2f * arena;
       }
       p.setComponent(i, v);
     }

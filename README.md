@@ -42,6 +42,23 @@ radar. Changes take effect at once and are saved in your user config directory.
 - **Wrap-around:** the arena wraps around: what leaves on one side comes back on the other. Everything is drawn where
   it is nearest to you, so you never see a wall; space just goes on.
 
+### Tuning (playtesting)
+
+The numbers in the rules above are defaults. Speeds, timings, wave sizes, the enemy ship, scores and the arena size
+can all be changed without rebuilding:
+
+1. Start the game once. It writes `tuning.example.properties` into your config directory, listing every value with its
+   default and what it does:
+   - Linux: `~/.config/simple-astroids`
+   - macOS: `~/Library/Application Support/simple-astroids`
+   - Windows: `%APPDATA%\simple-astroids`
+2. Copy it to `tuning.properties` in the same folder, remove the `#` in front of the lines you want to change, and edit
+   the values. For example, `ship.maxSpeed = 35` or `enemy.fireInterval = 2.5`.
+3. Start a new game. The file is read again for every game, so restarting the program isn't necessary.
+
+While values are changed, the game shows "CUSTOM TUNING" and doesn't record best scores. The title screen shows the
+first unknown key or unusable value, which keeps its default. Delete the file to play as released.
+
 ## Build and run
 
 You need JDK 25 and Maven. The game depends on the engine, `io.github.ad0bert:engine-named-scratch` (version in
@@ -83,7 +100,7 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 
 | | |
 |---|---|
-| `astroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, boss, ship, waves, score) steps by a fixed time step and reports `GameEvent`s. Deterministic for a seed, and unit-tested. |
+| `astroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, boss, ship, waves, score) steps by a fixed time step and reports `GameEvent`s, with its numbers from a `Tuning` (defaults, or `tuning.properties`). Deterministic for a seed and a tuning, and unit-tested. |
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. |
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds, made once at start-up. |

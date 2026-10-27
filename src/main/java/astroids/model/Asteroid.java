@@ -5,14 +5,12 @@ import org.joml.Vector3f;
 /** A rock drifting through the arena. Big ones split in two when hit, small ones are destroyed. */
 public final class Asteroid {
   public enum Size {
-    BIG(World.BIG_RADIUS, World.BIG_SCORE), SMALL(World.SMALL_RADIUS, World.SMALL_SCORE);
+    BIG(World.BIG_RADIUS), SMALL(World.SMALL_RADIUS);
 
     public final float radius;
-    public final int score;
 
-    Size(float radius, int score) {
+    Size(float radius) {
       this.radius = radius;
-      this.score = score;
     }
   }
 

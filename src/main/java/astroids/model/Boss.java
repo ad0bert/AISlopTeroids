@@ -6,7 +6,7 @@ import org.joml.Vector3f;
 public final class Boss {
   public final Vector3f position = new Vector3f();
   public final Vector3f velocity = new Vector3f();
-  public int health = World.BOSS_HEALTH;
+  public int health;
   /** Until it next picks a new direction, fires, and leaves. */
   public float turnTimer;
   public float fireTimer;
