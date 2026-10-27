@@ -36,9 +36,7 @@ public final class AstroidsGame implements Game {
     input.bindGamepad("start", Gamepad.BUTTON_START, Gamepad.BUTTON_A);
     input.bind("fullscreen", KeyEvent.VK_F11);
     this.scores = Settings.load(scoresFile(engine));
-    // the engine's debug text starts visible and covers the HUD: one F3 press hides it (F3 shows it again)
-    input.keyDown(KeyEvent.VK_F3);
-    input.keyUp(KeyEvent.VK_F3);
+    engine.setDebugOverlayVisible(false); // it would cover the HUD; F3 still shows it
     // -Dastroids.autopilot=true: straight into a game that flies itself (screenshots, smoke tests)
     engine.states().push(Boolean.getBoolean("astroids.autopilot") ? new PlayState(this) : new TitleState(this));
   }
