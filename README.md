@@ -30,9 +30,9 @@ radar. Changes take effect at once and are saved in your user config directory.
 ### Rules
 
 - **Asteroids:** a big asteroid (20 points) splits into two small ones when hit, and a small one (50 points) is
-  destroyed. Clear all rocks to start the next wave, which has one more big rock (up to 12).
-- **Enemy ship:** it appears every 20–35 seconds, wanders, and fires at you about every 1.4 seconds. Its shots are
-  slower than yours and a little inaccurate, so keep moving. Each hit is worth 100 points, and the third hit destroys it
+  destroyed. The first wave has 10 big rocks, and clearing a wave starts the next one with one more.
+- **Enemy ship:** it appears every 20–35 seconds, darts around, and fires at you twice a second. Its shots are slower
+  than yours but accurate, so keep moving. Each hit is worth 100 points, and the third hit destroys it
   for 1000. It leaves after 25 seconds. A red marker on screen shows where it is.
 - **Lives:** you have 3 ships. Touching a rock or the enemy ship, or being hit by its shot, costs one. The next ship
   appears in the middle after 2 seconds, shielded for 3 seconds. The best score is kept in your user data directory.

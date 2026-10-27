@@ -44,7 +44,7 @@ class WorldTest {
     final var w = World.newGame(42L);
     assertEquals(1, w.wave());
     assertEquals(T.lives, w.lives());
-    assertEquals(4, w.asteroids().size());
+    assertEquals(T.firstWaveRocks, w.asteroids().size());
     for (Asteroid a : w.asteroids()) {
       assertEquals(Asteroid.Size.BIG, a.size);
       assertTrue(dist(a.position, w.ship().position) >= T.safeDistance);
@@ -144,7 +144,7 @@ class WorldTest {
     final var w = empty();
     run(w, T.waveDelay + 0.1f, Controls.NONE);
     assertEquals(2, w.wave());
-    assertEquals(5, w.asteroids().size(), "one more big asteroid per wave");
+    assertEquals(T.firstWaveRocks + 1, w.asteroids().size(), "one more big asteroid per wave");
     assertTrue(w.drainEvents().contains(new GameEvent.WaveStarted(2)));
   }
 

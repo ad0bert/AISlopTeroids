@@ -94,7 +94,7 @@ class TuningTest {
         .map(l -> l.substring(1)).reduce("", (a, b) -> a + b + "\n");
     final var loaded = parse(uncommented);
     assertTrue(loaded.problems().isEmpty(), loaded.problems().toString());
-    assertEquals(Tuning.keys().size(), loaded.overrides());
+    assertFalse(loaded.custom(), "every value at its default: nothing is changed");
     final var d = new Tuning();
     assertEquals(d.enemyAimErrorDegrees, loaded.tuning().enemyAimErrorDegrees);
     assertEquals(d.shipDamping, loaded.tuning().shipDamping);
