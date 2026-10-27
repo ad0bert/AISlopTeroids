@@ -32,8 +32,8 @@ public final class World {
   public static final float SMALL_RADIUS = 2.5f;
   public static final float SHIP_RADIUS = 1f;
   public static final float BULLET_RADIUS = 0.3f;
-  public static final float BOSS_RADIUS = 2f;
-  public static final float SCOUT_RADIUS = 1.2f;
+  public static final float BOSS_RADIUS = 2.4f;
+  public static final float SCOUT_RADIUS = 1.44f;
   /** A scout notices player shots this close (and heading its way). */
   static final float DODGE_RANGE = 18f;
 
@@ -368,6 +368,7 @@ public final class World {
     randomDirection(a.spinAxis);
     a.spinSpeed = between(0.2f, 1.2f);
     a.shape.set(between(0.8f, 1.2f), between(0.75f, 1.1f), between(0.85f, 1.25f));
+    a.variant = this.random.nextInt(1 << 16);
   }
 
   /** Splits a big asteroid in two or removes a small one, and scores it. */
@@ -376,7 +377,7 @@ public final class World {
     if (scored) {
       addScore(a.size == Asteroid.Size.BIG ? this.t.scoreBigRock : this.t.scoreSmallRock);
     }
-    this.events.add(new GameEvent.AsteroidDestroyed(new Vector3f(a.position), a.size));
+    this.events.add(new GameEvent.AsteroidDestroyed(new Vector3f(a.position), a.size, new Vector3f(a.velocity)));
     if (a.size == Asteroid.Size.BIG) {
       // the two halves fly apart across the parent's path
       final var apart = randomDirection(this.tmp2);
@@ -407,7 +408,7 @@ public final class World {
     final var b = this.boss;
     final int points = b.kind == Boss.Kind.SCOUT ? this.t.scoreScoutDestroyed : this.t.scoreEnemyDestroyed;
     addScore(points);
-    this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position), b.kind, points));
+    this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position), b.kind, points, new Vector3f(b.velocity)));
     this.boss = null;
     this.bossDelay = enemyWait();
   }

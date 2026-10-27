@@ -66,7 +66,7 @@ class WorldTest {
     assertTrue(pieces.stream().allMatch(a -> a.size == Asteroid.Size.SMALL));
     assertTrue(w.score() >= T.scoreBigRock);
     assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.AsteroidDestroyed d
-        && d.size() == Asteroid.Size.BIG));
+        && d.size() == Asteroid.Size.BIG && d.velocity().length() == 0f), "it stood still: so do its pieces");
 
     // shoot each small one: it goes away without splitting
     final var w2 = empty();
@@ -346,7 +346,7 @@ class WorldTest {
     assertNull(w.boss());
     assertEquals(t.scoreScoutDestroyed, w.score());
     assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.BossDestroyed d
-        && d.kind() == Boss.Kind.SCOUT && d.points() == t.scoreScoutDestroyed));
+        && d.kind() == Boss.Kind.SCOUT && d.points() == t.scoreScoutDestroyed && d.velocity() != null));
   }
 
   @Test

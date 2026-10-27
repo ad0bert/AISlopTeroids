@@ -116,7 +116,7 @@ final class WorldView {
 
   private Entity newAsteroid(Asteroid a) {
     final var e = new Entity(a.size == Asteroid.Size.BIG ? "big rock" : "small rock");
-    e.add(new MeshRenderer(this.art.rock,
+    e.add(new MeshRenderer(this.art.rocks[Math.floorMod(a.variant, this.art.rocks.length)],
         a.size == Asteroid.Size.BIG ? this.art.rockMaterial : this.art.smallRockMaterial));
     e.transform().scale().set(a.shape).mul(a.radius());
     shown(a.position, e.transform().position());
@@ -135,20 +135,21 @@ final class WorldView {
 
   private Entity newBoss(Boss.Kind kind) {
     final boolean scout = kind == Boss.Kind.SCOUT;
-    final float r = kind.radius;
     final var e = new Entity(scout ? "scout" : "boss");
-    e.add(new MeshRenderer(this.art.ball, scout ? this.art.scoutHull : this.art.bossHull));
-    e.transform().scale().set(r * 1.1f, r * (scout ? 0.28f : 0.35f), r * 1.1f);
-    final var dome = new Entity(scout ? "scout dome" : "boss dome");
-    dome.add(new MeshRenderer(this.art.ball, scout ? this.art.scoutDome : this.art.bossDome));
-    dome.transform().position().set(0f, 0.6f, 0f);
-    dome.transform().scale().set(0.45f, 1.1f, 0.45f);
-    dome.transform().setParent(e.transform());
-    this.scene.add(dome);
-    this.attached.computeIfAbsent(e, k -> new ArrayList<>()).add(dome);
+    e.transform().scale().set(kind.radius); // the parts are made for radius 1
     final var glow = scout ? Light.point(1f, 0.7f, 0.15f, 3f, 20f) : Light.point(1f, 0.25f, 0.15f, 4f, 30f);
     glow.castShadows = false;
     e.add(glow);
+    for (var part : scout ? this.art.scoutParts : this.art.bossParts) {
+      final var p = new Entity(e.name() + " part");
+      p.add(new MeshRenderer(part.mesh(), part.material()));
+      p.transform().position().set(part.position());
+      p.transform().rotation().set(part.rotation());
+      p.transform().scale().set(part.scale());
+      p.transform().setParent(e.transform());
+      this.scene.add(p);
+      this.attached.computeIfAbsent(e, k -> new ArrayList<>()).add(p);
+    }
     return e;
   }
 
@@ -162,18 +163,18 @@ final class WorldView {
       case GameEvent.AsteroidDestroyed d -> {
         final boolean big = d.size() == Asteroid.Size.BIG;
         sound(big ? this.art.bigBoom : this.art.smallBoom, d.position(), 1f, 0.9f + 0.2f * this.random.nextFloat());
-        burst(d.position(), big ? 14 : 8, big ? 1.4f : 0.9f, big ? 12f : 9f,
-            big ? this.art.rockMaterial : this.art.smallRockMaterial);
+        rockBurst(d.position(), d.velocity(), big);
       }
       case GameEvent.BossHit h -> {
         sound(this.art.clang, h.position(), 1f, 1f);
-        burst(h.position(), 5, 0.4f, 10f, this.art.fire);
+        sparks(shown(h.position(), new Vector3f()), new Vector3f(), 8, 0.06f, 22f);
+        wreckage(shown(h.position(), new Vector3f()), new Vector3f(), 3, 0.25f, 9f, this.art.bossHull,
+            this.art.bossHull);
       }
       case GameEvent.BossDestroyed d -> {
         final boolean scout = d.kind() == Boss.Kind.SCOUT;
         sound(this.art.bigBoom, d.position(), 1.2f, scout ? 1f : 0.7f);
-        burst(d.position(), scout ? 12 : 18, 0.7f, 16f, this.art.fire);
-        burst(d.position(), scout ? 6 : 10, 0.8f, 10f, scout ? this.art.scoutHull : this.art.bossHull);
+        shipBurst(d.position(), d.velocity(), d.kind());
       }
       case GameEvent.BossAppeared a -> audio.play2D(this.art.alarm, 0.8f, AudioBus.EFFECTS);
       case GameEvent.ShipDestroyed d -> {
@@ -195,6 +196,140 @@ final class WorldView {
 
   private void sound(AudioClip clip, Vector3f position, float volume, float pitch) {
     this.engine.audio().play(clip, shown(position, new Vector3f()), volume, pitch, AudioBus.EFFECTS, 1);
+  }
+
+  /**
+   * A rock breaking up: chips of rock of all sizes (many small, a few large) flung out from all through it and flying on
+   * with its motion, a cloud of dust spreading and fading, and a few sparks where it was hit.
+   */
+  private void rockBurst(Vector3f position, Vector3f rockVelocity, boolean big) {
+    final var at = shown(position, new Vector3f());
+    final float radius = big ? World.BIG_RADIUS : World.SMALL_RADIUS;
+    final var material = big ? this.art.rockMaterial : this.art.smallRockMaterial;
+    final int chips = big ? 26 : 14;
+    for (int i = 0; i < chips; i++) {
+      final var dir = randomDirection(new Vector3f());
+      final float share = 0.12f + 0.88f * (float) Math.pow(this.random.nextFloat(), 3); // mostly small
+      final float size = radius * 0.3f * share;
+      final float speed = (big ? 7f : 6f) * (0.6f + 0.8f * this.random.nextFloat()) / (0.35f + share);
+      final var e = new Entity("rock chip");
+      e.add(new MeshRenderer(this.art.chips[this.random.nextInt(this.art.chips.length)], material));
+      e.transform().position().set(at).fma(radius * 0.6f * this.random.nextFloat(), dir);
+      e.transform().rotation().rotationAxis((float) (2 * Math.PI * this.random.nextFloat()),
+          randomDirection(new Vector3f()));
+      e.transform().scale().set(size);
+      e.add(new Debris(this.scene, new Vector3f(dir).mul(speed).add(rockVelocity), randomDirection(new Vector3f()),
+          1f + 5f * this.random.nextFloat(), 1.6f + 1.6f * this.random.nextFloat(), size, 0.35f, 0.15f));
+      this.scene.add(e);
+    }
+    final var cloud = new Entity("dust");
+    final var dustMaterial = this.art.dustMaterial(big);
+    cloud.add(new MeshRenderer(this.art.dust, dustMaterial));
+    cloud.transform().position().set(at);
+    cloud.transform().rotation().rotationAxis((float) (2 * Math.PI * this.random.nextFloat()),
+        randomDirection(new Vector3f()));
+    cloud.add(new Dust(this.scene, dustMaterial, new Vector3f(rockVelocity).mul(0.9f), radius * 0.6f,
+        radius * (big ? 3.2f : 2.6f), 1.4f + 0.6f * this.random.nextFloat()));
+    this.scene.add(cloud);
+    for (int i = 0; i < 5; i++) { // sparks: quick and bright
+      final var e = new Entity("spark");
+      e.add(new MeshRenderer(this.art.ball, this.art.fire));
+      e.transform().position().set(at);
+      final float size = 0.08f + 0.08f * this.random.nextFloat();
+      e.transform().scale().set(size);
+      e.add(new Debris(this.scene, randomDirection(new Vector3f()).mul(18f + 14f * this.random.nextFloat())
+          .add(rockVelocity), new Vector3f(0f, 1f, 0f), 0f, 0.2f + 0.2f * this.random.nextFloat(), size));
+      this.scene.add(e);
+    }
+  }
+
+  /**
+   * An enemy ship blowing up: a flash of light, overlapping fireballs that swell, cool and fade, torn pieces of its
+   * hull (in its own materials) tumbling away with its motion, embers streaking out, and a cloud of smoke.
+   */
+  private void shipBurst(Vector3f position, Vector3f shipVelocity, Boss.Kind kind) {
+    final boolean scout = kind == Boss.Kind.SCOUT;
+    final var at = shown(position, new Vector3f());
+    final float r = kind.radius;
+    final var drift = new Vector3f(shipVelocity).mul(0.3f); // the cloud keeps a little of the ship's motion
+
+    final var flash = new Entity("flash");
+    flash.transform().position().set(at);
+    final var light = Light.point(1f, 0.6f, 0.25f, 8f, r * 25f);
+    light.castShadows = false;
+    flash.add(light);
+    flash.add(new Flash(this.scene, light, 0.7f));
+    this.scene.add(flash);
+
+    // a ragged cluster of puffs of fire, one after another, rather than one ball
+    final int puffs = scout ? 5 : 7;
+    for (int i = 0; i < puffs; i++) {
+      final var ball = new Entity("fireball");
+      final var fire = this.art.fireballMaterial();
+      ball.add(new MeshRenderer(this.art.smoothBall, fire)).castShadows = false;
+      ball.transform().position().set(at).fma(i == 0 ? 0f : r * (0.3f + 0.4f * this.random.nextFloat()),
+          randomDirection(new Vector3f()));
+      ball.transform().scale().set(0f);
+      final float size = r * (i == 0 ? 1.2f : 0.6f + 0.5f * this.random.nextFloat());
+      ball.add(new Blast(this.scene, fire, new Vector3f(drift).fma(2f, randomDirection(new Vector3f())),
+          i == 0 ? 0f : 0.03f + 0.15f * this.random.nextFloat(), size * 0.25f, size,
+          0.6f + 0.5f * this.random.nextFloat()));
+      this.scene.add(ball);
+    }
+
+    final var hull = scout ? this.art.scoutHull : this.art.bossHull;
+    final var trim = scout ? this.art.scoutFin : this.art.bossPaint;
+    wreckage(at, shipVelocity, scout ? 12 : 18, r * 0.32f, 11f, hull, trim);
+    sparks(at, drift, scout ? 18 : 28, 0.09f, 26f);
+
+    final var smoke = new Entity("smoke");
+    final var soot = this.art.smokeMaterial();
+    smoke.add(new MeshRenderer(this.art.dust, soot));
+    smoke.transform().position().set(at);
+    smoke.add(new Dust(this.scene, soot, drift, r * 0.5f, r * 3.2f, 2.6f));
+    this.scene.add(smoke);
+  }
+
+  /** Torn pieces of hull: mostly small, a few large, flung out and tumbling, shrinking away only at the end. */
+  private void wreckage(Vector3f at, Vector3f velocity, int count, float largest, float speed, Material hull,
+      Material trim) {
+    for (int i = 0; i < count; i++) {
+      final var dir = randomDirection(new Vector3f());
+      final float share = 0.2f + 0.8f * (float) Math.pow(this.random.nextFloat(), 2.5);
+      final float size = largest * share;
+      final var e = new Entity("wreckage");
+      e.add(new MeshRenderer(this.art.shards[this.random.nextInt(this.art.shards.length)],
+          this.random.nextFloat() < 0.75f ? hull : trim));
+      e.transform().position().set(at).fma(largest * this.random.nextFloat(), dir);
+      e.transform().rotation().rotationAxis((float) (2 * Math.PI * this.random.nextFloat()),
+          randomDirection(new Vector3f()));
+      e.transform().scale().set(size);
+      e.add(new Debris(this.scene, new Vector3f(dir).mul(speed * (0.5f + this.random.nextFloat()) / (0.4f + share))
+          .add(velocity), randomDirection(new Vector3f()), 2f + 8f * this.random.nextFloat(),
+          1.8f + 1.7f * this.random.nextFloat(), size, 0.3f, 0.1f));
+      this.scene.add(e);
+    }
+  }
+
+  /** Glowing embers streaking out, quick to burn out. */
+  private void sparks(Vector3f at, Vector3f velocity, int count, float size, float speed) {
+    for (int i = 0; i < count; i++) {
+      final var e = new Entity("ember");
+      e.add(new MeshRenderer(this.art.ball, this.art.fire)).castShadows = false;
+      e.transform().position().set(at);
+      final float s = size * (0.5f + this.random.nextFloat());
+      e.transform().scale().set(s);
+      e.add(new Debris(this.scene, randomDirection(new Vector3f()).mul(speed * (0.5f + this.random.nextFloat()))
+          .add(velocity), randomDirection(new Vector3f()), 6f, 0.4f + 0.6f * this.random.nextFloat(), s));
+      this.scene.add(e);
+    }
+  }
+
+  private Vector3f randomDirection(Vector3f dest) {
+    final float z = this.random.nextFloat() * 2f - 1f;
+    final float a = (float) (2 * Math.PI * this.random.nextFloat());
+    final float r = (float) Math.sqrt(1f - z * z);
+    return dest.set(r * (float) Math.cos(a), r * (float) Math.sin(a), z);
   }
 
   private void burst(Vector3f position, int count, float size, float speed, Material material) {

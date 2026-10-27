@@ -13,7 +13,8 @@ public sealed interface GameEvent {
   record BossShot(Vector3f position) implements GameEvent {
   }
 
-  record AsteroidDestroyed(Vector3f position, Asteroid.Size size) implements GameEvent {
+  /** Also how the rock was moving: its pieces fly on with it. */
+  record AsteroidDestroyed(Vector3f position, Asteroid.Size size, Vector3f velocity) implements GameEvent {
   }
 
   record BossAppeared(Vector3f position, Boss.Kind kind) implements GameEvent {
@@ -22,7 +23,7 @@ public sealed interface GameEvent {
   record BossHit(Vector3f position) implements GameEvent {
   }
 
-  record BossDestroyed(Vector3f position, Boss.Kind kind, int points) implements GameEvent {
+  record BossDestroyed(Vector3f position, Boss.Kind kind, int points, Vector3f velocity) implements GameEvent {
   }
 
   record BossLeft() implements GameEvent {
