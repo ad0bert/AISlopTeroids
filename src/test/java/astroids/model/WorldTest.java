@@ -45,6 +45,7 @@ class WorldTest {
     assertEquals(1, w.wave());
     assertEquals(T.lives, w.lives());
     assertEquals(T.firstWaveRocks, w.asteroids().size());
+    assertEquals(T.shieldTime, w.ship().invulnerable, "the first ship starts shielded, like every later one");
     for (Asteroid a : w.asteroids()) {
       assertEquals(Asteroid.Size.BIG, a.size);
       assertTrue(dist(a.position, w.ship().position) >= T.safeDistance);

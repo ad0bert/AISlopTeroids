@@ -15,7 +15,7 @@ import org.joml.Vector3f;
  * <li>A big asteroid that is hit splits into two small ones; a small one is destroyed.</li>
  * <li>The boss shoots at the player, takes a few hits, and leaves after a while.</li>
  * <li>Touching an asteroid or the boss, or being hit by a boss bullet, costs a life; the ship comes back in the middle
- * after a moment and is shielded for a few seconds.</li>
+ * after a moment. Every ship, the first one too, is shielded for a few seconds.</li>
  * <li>When no asteroids are left, the next wave starts with one more big asteroid.</li>
  * </ul>
  *
@@ -62,6 +62,7 @@ public final class World {
   /** A new game with other numbers (playtesting). */
   public static World newGame(long seed, Tuning tuning) {
     final var w = new World(seed, true, tuning);
+    w.ship.invulnerable = tuning.shieldTime; // like a respawned ship: the first rocks may already be heading its way
     w.startWave(1);
     return w;
   }

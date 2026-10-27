@@ -35,7 +35,7 @@ radar. Changes take effect at once and are saved in your user config directory.
   than yours but accurate, so keep moving. Each hit is worth 100 points, and the third hit destroys it
   for 1000. It leaves after 25 seconds. A red marker on screen shows where it is.
 - **Lives:** you have 3 ships. Touching a rock or the enemy ship, or being hit by its shot, costs one. The next ship
-  appears in the middle after 2 seconds, shielded for 3 seconds. The best score is kept in your user data directory.
+  appears in the middle after 2 seconds. Every ship, the first one too, is shielded for 3 seconds. The best score is kept in your user data directory.
 - **Finding things:** the radar in the bottom right shows every rock and the enemy ship around you, seen from above
   with your view pointing up. A line from each blip shows whether it is above or below you. When only three rocks are
   left, each gets a marker on screen, or an arrow at the edge when it's behind you.
