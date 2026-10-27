@@ -48,8 +48,9 @@ public final class AstroidsGame implements Game {
     input.bindGamepad("previous", Gamepad.BUTTON_DPAD_LEFT);
     input.bind("next", KeyEvent.VK_RIGHT, KeyEvent.VK_D);
     input.bindGamepad("next", Gamepad.BUTTON_DPAD_RIGHT);
-    input.bind("quit", KeyEvent.VK_Q);
+    input.bind("quit", KeyEvent.VK_Q); // back to the title screen, and from there out of the game
     input.bindGamepad("quit", Gamepad.BUTTON_BACK);
+    input.bind("exit", KeyEvent.VK_ESCAPE, KeyEvent.VK_Q); // on the title screen only: Esc frees the mouse in a game
     this.scores = Settings.load(scoresFile(engine));
     if (HighScores.migrate(this.scores)) {
       saveScores();

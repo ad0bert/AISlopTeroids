@@ -13,7 +13,7 @@ import engine.render.UiCanvas;
 
 /**
  * The title screen: rocks drifting past a slowly turning camera, the name, the difficulty (Left / Right to change it),
- * and in turn the controls and the difficulty's table of best scores.
+ * and in turn the controls and the difficulty's table of best scores. Q or Esc (or Back on a gamepad) quits the game.
  */
 final class TitleState extends LevelState {
   /** Seconds each page (controls, scores) stays before the other one. */
@@ -70,6 +70,11 @@ final class TitleState extends LevelState {
     } else if (this.time - this.pageStart > PAGE_SECONDS) {
       this.scoresPage = !this.scoresPage;
       this.pageStart = this.time;
+    }
+    // not in its first moments: the Q that left a game for this screen must not also quit
+    if (this.time > 0.3f && (input.wasActionPressed("exit") || input.wasActionPressed("quit"))) {
+      engine.stop(); // everything is saved as it changes: the options, the scores
+      return;
     }
     if (engine.input().wasActionPressed("options")) {
       engine.states().push(new SettingsState(this.game));
@@ -130,6 +135,9 @@ final class TitleState extends LevelState {
         y += ui.lineHeight(1.05f) + 6f;
       }
     }
+    final var quit = "Q / Esc  quit";
+    Hud.text(ui, quit, width - ui.textWidth(quit, 1f) - 16f, height - ui.lineHeight(1f) - 12f, 1f, 0.7f, 0.72f, 0.78f,
+        1f);
     final var tuning = this.game.tuning();
     if (tuning.custom()) {
       final var note = "Custom tuning: " + tuning.overrides() + " value" + (tuning.overrides() == 1 ? "" : "s")

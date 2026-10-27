@@ -20,6 +20,7 @@ The graphics are kept as simple as possible: low-poly rocks, glowing shots, a st
 | Hyperspace | `E` | `B` or `LB` |
 | Pause | `P` (or `Esc` to free the mouse) | `Start` |
 | Quit to the title screen | `Q` in the pause menu or after the game | `Back` |
+| Quit the game | `Q` or `Esc` on the title screen | `Back` on the title screen |
 | Difficulty | `Left` / `Right` on the title screen | d-pad |
 | Options | `O` on the title screen or in the pause menu | |
 | Fullscreen | `F11` | |
