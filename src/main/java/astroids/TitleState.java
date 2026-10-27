@@ -1,5 +1,7 @@
 package astroids;
 
+import java.util.Locale;
+
 import org.joml.Vector3f;
 
 import astroids.model.Controls;
@@ -9,14 +11,23 @@ import engine.core.LevelState;
 import engine.ecs.Entity;
 import engine.render.UiCanvas;
 
-/** The title screen: rocks drifting past a slowly turning camera, the name, the controls and the best score. */
+/**
+ * The title screen: rocks drifting past a slowly turning camera, the name, the difficulty (Left / Right to change it),
+ * and in turn the controls and the difficulty's table of best scores. Q or Esc (or Back on a gamepad) quits the game.
+ */
 final class TitleState extends LevelState {
+  /** Seconds each page (controls, scores) stays before the other one. */
+  static final float PAGE_SECONDS = 8f;
+
   private final AstroidsGame game;
   private World world;
   private WorldView view;
   private Entity camera;
   private Clicks clicks;
   private float time;
+  private boolean scoresPage;
+  private float pageStart;
+  private HighScores table;
 
   TitleState(AstroidsGame game) {
     this.game = game;
@@ -29,6 +40,8 @@ final class TitleState extends LevelState {
     this.camera = this.game.art().addBackdrop(engine.scene());
     this.clicks = new Clicks(engine.input());
     this.view.sync(this.world, new Vector3f(), 0f);
+    this.table = this.game.highScores(this.game.options().difficulty);
+    this.game.art().addLoop(engine.scene(), "ambience", this.game.art().titleAmbience, 0.8f);
   }
 
   @Override
@@ -44,6 +57,25 @@ final class TitleState extends LevelState {
     this.view.sync(this.world, this.camera.transform().position(), dt);
     this.camera.transform().rotation().identity().rotateY(this.time * 0.05f).rotateX(0.15f * (float) Math.sin(
         this.time * 0.1f));
+    final var input = engine.input();
+    final int step = (input.wasActionPressed("next") ? 1 : 0) - (input.wasActionPressed("previous") ? 1 : 0);
+    final var options = this.game.options();
+    if (step != 0 && options.difficulty.step(step) != options.difficulty) {
+      options.difficulty = options.difficulty.step(step);
+      this.game.saveOptions();
+      this.game.loadTuning(); // what a tuning file changes depends on the difficulty
+      this.table = this.game.highScores(options.difficulty);
+      this.scoresPage = true; // show what there is to beat
+      this.pageStart = this.time;
+    } else if (this.time - this.pageStart > PAGE_SECONDS) {
+      this.scoresPage = !this.scoresPage;
+      this.pageStart = this.time;
+    }
+    // not in its first moments: the Q that left a game for this screen must not also quit
+    if (this.time > 0.3f && (input.wasActionPressed("exit") || input.wasActionPressed("quit"))) {
+      engine.stop(); // everything is saved as it changes: the options, the scores
+      return;
+    }
     if (engine.input().wasActionPressed("options")) {
       engine.states().push(new SettingsState(this.game));
       return;
@@ -55,6 +87,11 @@ final class TitleState extends LevelState {
     }
   }
 
+  private static String extraShips(int every) {
+    return every > 0 ? String.format(Locale.ROOT, "Every %,d points bring an extra ship.", every)
+        : "No extra ships with this tuning.";
+  }
+
   @Override
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
     final float top = height * 0.22f;
@@ -62,16 +99,45 @@ final class TitleState extends LevelState {
     Hud.centered(ui, "Asteroids in three dimensions", width, top + ui.lineHeight(4f) + 4f, 1.3f, 0.75f, 0.8f,
         0.9f, 1f);
     final float blink = 0.6f + 0.4f * (float) Math.sin(this.time * 4f);
-    Hud.centered(ui, "Press Enter or click to start", width, height * 0.5f, 1.6f, 1f, 1f, 1f, blink);
+    Hud.centered(ui, "Press Enter or click to start", width, height * 0.46f, 1.6f, 1f, 1f, 1f, blink);
 
-    final String[] help = { "Mouse  look       W / S  thrust forward / back       A / D  slide",
-        "Space / Shift  up / down       Left click or Ctrl  fire       P  pause       O  options       F11  fullscreen",
-        "Big rocks split in two, small ones shatter. Watch out for the red ship: it shoots back." };
+    final var difficulty = this.game.options().difficulty;
+    final float dy = height * 0.46f + ui.lineHeight(1.6f) + 14f;
+    final var left = difficulty.step(-1) != difficulty ? "<   " : "    ";
+    final var right = difficulty.step(1) != difficulty ? "   >" : "    ";
+    Hud.centered(ui, left + difficulty.label.toUpperCase(Locale.ROOT) + right, width, dy, 1.6f, 0.6f, 0.85f, 1f, 1f);
+    final var best = this.table.entries().isEmpty() ? "Left / Right: difficulty"
+        : "Left / Right: difficulty      Best  " + this.table.best() + "  " + this.table.entries().get(0).name();
+    Hud.centered(ui, best, width, dy + ui.lineHeight(1.6f) + 2f, 1f, 0.75f, 0.78f, 0.85f, 1f);
+
     float y = height * 0.66f;
-    for (String line : help) {
-      Hud.centered(ui, line, width, y, 1.05f, 0.8f, 0.82f, 0.88f, 1f);
-      y += ui.lineHeight(1.05f) + 6f;
+    if (this.scoresPage) {
+      Hud.centered(ui, "BEST ON " + difficulty.label.toUpperCase(Locale.ROOT), width, y, 1.15f, 0.95f, 0.85f, 0.45f,
+          1f);
+      y += ui.lineHeight(1.15f) + 8f;
+      final var entries = this.table.entries();
+      if (entries.isEmpty()) {
+        Hud.centered(ui, "No scores yet: be the first", width, y, 1.05f, 0.8f, 0.82f, 0.88f, 1f);
+      } else { // two columns of five
+        final float scale = 1f;
+        final float gap = 40f;
+        final float x = (width - 2f * Hud.TABLE_WIDTH * scale - gap) / 2f;
+        Hud.scoreRows(ui, entries, 0, 5, -1, x, y, scale);
+        Hud.scoreRows(ui, entries, 5, 10, -1, x + Hud.TABLE_WIDTH * scale + gap, y, scale);
+      }
+    } else {
+      final String[] help = { "Mouse  look       W / S  thrust forward / back       A / D  slide       Space / Shift  up / down",
+          "Left click or Ctrl  fire       E  hyperspace       P  pause       O  options       F11  fullscreen",
+          "Big rocks split in two, small ones shatter. Watch out for the red ship and the quick yellow scout.",
+          extraShips(this.game.tuning().tuning().extraLifeEvery) };
+      for (String line : help) {
+        Hud.centered(ui, line, width, y, 1.05f, 0.8f, 0.82f, 0.88f, 1f);
+        y += ui.lineHeight(1.05f) + 6f;
+      }
     }
+    final var quit = "Q / Esc  quit";
+    Hud.text(ui, quit, width - ui.textWidth(quit, 1f) - 16f, height - ui.lineHeight(1f) - 12f, 1f, 0.7f, 0.72f, 0.78f,
+        1f);
     final var tuning = this.game.tuning();
     if (tuning.custom()) {
       final var note = "Custom tuning: " + tuning.overrides() + " value" + (tuning.overrides() == 1 ? "" : "s")
@@ -82,10 +148,6 @@ final class TitleState extends LevelState {
       final int more = tuning.problems().size() - 1;
       final var note = "tuning.properties: " + tuning.problems().get(0) + (more > 0 ? "  (+" + more + " more)" : "");
       Hud.centered(ui, note, width, height * 0.92f + ui.lineHeight(1f) + 2f, 1f, 1f, 0.45f, 0.35f, 1f);
-    }
-    final int best = this.game.highScore();
-    if (best > 0) {
-      Hud.centered(ui, "Best score  " + best, width, height * 0.88f, 1.2f, 0.95f, 0.85f, 0.45f, 1f);
     }
   }
 }

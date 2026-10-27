@@ -8,15 +8,16 @@ import org.slf4j.LoggerFactory;
 
 import com.jogamp.newt.event.KeyEvent;
 
+import astroids.model.Difficulty;
+import astroids.model.Tuning;
 import engine.core.Engine;
 import engine.core.Game;
 import engine.core.Settings;
-import astroids.model.Tuning;
 import engine.input.Gamepad;
 
 /**
  * SimpleAstroids: the classic Asteroids as a 3D first-person game. Sets up what every screen shares (art, sounds,
- * controls, the high score) and starts on the title screen; the screens are {@link engine.core.GameState}s.
+ * controls, options, the score tables) and starts on the title screen; the screens are {@link engine.core.GameState}s.
  */
 public final class AstroidsGame implements Game {
   private static final Logger log = LoggerFactory.getLogger(AstroidsGame.class);
@@ -41,7 +42,19 @@ public final class AstroidsGame implements Game {
     input.bindGamepad("start", Gamepad.BUTTON_START, Gamepad.BUTTON_A);
     input.bind("fullscreen", KeyEvent.VK_F11);
     input.bind("options", KeyEvent.VK_O);
+    input.bind("hyperspace", KeyEvent.VK_E);
+    input.bindGamepad("hyperspace", Gamepad.BUTTON_B, Gamepad.BUTTON_LEFT_BUMPER);
+    input.bind("previous", KeyEvent.VK_LEFT, KeyEvent.VK_A);
+    input.bindGamepad("previous", Gamepad.BUTTON_DPAD_LEFT);
+    input.bind("next", KeyEvent.VK_RIGHT, KeyEvent.VK_D);
+    input.bindGamepad("next", Gamepad.BUTTON_DPAD_RIGHT);
+    input.bind("quit", KeyEvent.VK_Q); // back to the title screen, and from there out of the game
+    input.bindGamepad("quit", Gamepad.BUTTON_BACK);
+    input.bind("exit", KeyEvent.VK_ESCAPE, KeyEvent.VK_Q); // on the title screen only: Esc frees the mouse in a game
     this.scores = Settings.load(scoresFile(engine));
+    if (HighScores.migrate(this.scores)) {
+      saveScores();
+    }
     this.settings = Settings.load(settingsFile(engine));
     this.options = Options.load(this.settings, engine.isFullscreen(), engine.isVsync());
     this.options.apply(engine);
@@ -96,11 +109,13 @@ public final class AstroidsGame implements Game {
    * it could not be used.
    */
   Tuning.Loaded loadTuning() {
+    final var difficulty = this.options.difficulty;
     try {
-      this.tuning = Tuning.load(this.tuningFile);
+      this.tuning = Tuning.load(this.tuningFile, difficulty);
     } catch (IOException | IllegalArgumentException e) {
       log.warn("Could not read {}: {}; playing with the defaults", this.tuningFile, e.getMessage());
-      this.tuning = new Tuning.Loaded(new Tuning(), 0, java.util.List.of("could not read the file: " + e.getMessage()));
+      this.tuning = new Tuning.Loaded(Tuning.of(difficulty), 0,
+          java.util.List.of("could not read the file: " + e.getMessage()));
     }
     if (this.tuning.custom()) {
       log.info("Custom tuning from {}: {} values changed", this.tuningFile, this.tuning.overrides());
@@ -118,22 +133,34 @@ public final class AstroidsGame implements Game {
     return this.tuningFile;
   }
 
-  int highScore() {
-    return this.scores.getInt("highScore", 0);
+  /** The ten best games on a difficulty. */
+  HighScores highScores(Difficulty difficulty) {
+    return HighScores.load(this.scores, difficulty);
   }
 
-  /** Remembers a new best score; returns whether it was one. */
-  boolean recordScore(int score) {
-    if (score <= highScore()) {
-      return false;
+  /** Puts a game in its difficulty's table and saves it; returns its rank (0 = top), or -1. */
+  int recordScore(Difficulty difficulty, String name, int score, int wave) {
+    final var table = highScores(difficulty);
+    final int rank = table.add(name, score, wave);
+    if (rank >= 0) {
+      table.store(this.scores, difficulty);
+      this.scores.set("lastName", HighScores.cleanName(name));
+      saveScores();
     }
-    this.scores.set("highScore", score);
+    return rank;
+  }
+
+  /** The name last put in a table: the default for the next one. */
+  String lastName() {
+    return this.scores.get("lastName", "");
+  }
+
+  private void saveScores() {
     try {
       this.scores.save();
     } catch (IOException e) {
-      log.warn("Could not save the high score to {}: {}", this.scores.file(), e.getMessage());
+      log.warn("Could not save the scores to {}: {}", this.scores.file(), e.getMessage());
     }
-    return true;
   }
 
   private static Path settingsFile(Engine engine) {
@@ -149,7 +176,7 @@ public final class AstroidsGame implements Game {
     try {
       return engine.userDirs().data().resolve("scores.properties");
     } catch (IOException e) {
-      log.warn("No data directory ({}); the high score is kept next to the game", e.getMessage());
+      log.warn("No data directory ({}); the scores are kept next to the game", e.getMessage());
       return Path.of("simple-astroids-scores.properties");
     }
   }

@@ -4,6 +4,7 @@ import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import astroids.model.Asteroid;
+import astroids.model.Boss;
 import astroids.model.World;
 import engine.render.UiCanvas;
 
@@ -58,8 +59,14 @@ final class Radar {
       final boolean big = a.size == Asteroid.Size.BIG;
       blip(ui, cx, cy, r, b, big ? 4f : 3f, 0.8f, 0.78f, 0.72f);
     }
-    if (world.boss() != null) {
-      blip(ui, cx, cy, r, project(world.delta(ship, world.boss().position, delta), view, range), 5f, 1f, 0.3f, 0.25f);
+    final var boss = world.boss();
+    if (boss != null) {
+      final var b = project(world.delta(ship, boss.position, delta), view, range);
+      if (boss.kind == Boss.Kind.SCOUT) {
+        blip(ui, cx, cy, r, b, 4f, 1f, 0.7f, 0.15f);
+      } else {
+        blip(ui, cx, cy, r, b, 5f, 1f, 0.3f, 0.25f);
+      }
     }
   }
 

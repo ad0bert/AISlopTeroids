@@ -69,9 +69,9 @@ final class WorldView {
     }
     final Boss boss = world.boss();
     if (boss != null) {
-      final var e = entityFor(boss, this::newBoss);
+      final var e = entityFor(boss, () -> newBoss(boss.kind));
       place(e, boss.position);
-      e.transform().rotation().rotateY(1.5f * dt);
+      e.transform().rotation().rotateY((boss.kind == Boss.Kind.SCOUT ? 4f : 1.5f) * dt);
     }
     // what the model no longer has
     final var it = this.entities.entrySet().iterator();
@@ -133,18 +133,20 @@ final class WorldView {
     return e;
   }
 
-  private Entity newBoss() {
-    final var e = new Entity("boss");
-    e.add(new MeshRenderer(this.art.ball, this.art.bossHull));
-    e.transform().scale().set(World.BOSS_RADIUS * 1.1f, World.BOSS_RADIUS * 0.35f, World.BOSS_RADIUS * 1.1f);
-    final var dome = new Entity("boss dome");
-    dome.add(new MeshRenderer(this.art.ball, this.art.bossDome));
+  private Entity newBoss(Boss.Kind kind) {
+    final boolean scout = kind == Boss.Kind.SCOUT;
+    final float r = kind.radius;
+    final var e = new Entity(scout ? "scout" : "boss");
+    e.add(new MeshRenderer(this.art.ball, scout ? this.art.scoutHull : this.art.bossHull));
+    e.transform().scale().set(r * 1.1f, r * (scout ? 0.28f : 0.35f), r * 1.1f);
+    final var dome = new Entity(scout ? "scout dome" : "boss dome");
+    dome.add(new MeshRenderer(this.art.ball, scout ? this.art.scoutDome : this.art.bossDome));
     dome.transform().position().set(0f, 0.6f, 0f);
     dome.transform().scale().set(0.45f, 1.1f, 0.45f);
     dome.transform().setParent(e.transform());
     this.scene.add(dome);
     this.attached.computeIfAbsent(e, k -> new ArrayList<>()).add(dome);
-    final var glow = Light.point(1f, 0.25f, 0.15f, 4f, 30f);
+    final var glow = scout ? Light.point(1f, 0.7f, 0.15f, 3f, 20f) : Light.point(1f, 0.25f, 0.15f, 4f, 30f);
     glow.castShadows = false;
     e.add(glow);
     return e;
@@ -168,9 +170,10 @@ final class WorldView {
         burst(h.position(), 5, 0.4f, 10f, this.art.fire);
       }
       case GameEvent.BossDestroyed d -> {
-        sound(this.art.bigBoom, d.position(), 1.2f, 0.7f);
-        burst(d.position(), 18, 0.7f, 16f, this.art.fire);
-        burst(d.position(), 10, 0.8f, 10f, this.art.bossHull);
+        final boolean scout = d.kind() == Boss.Kind.SCOUT;
+        sound(this.art.bigBoom, d.position(), 1.2f, scout ? 1f : 0.7f);
+        burst(d.position(), scout ? 12 : 18, 0.7f, 16f, this.art.fire);
+        burst(d.position(), scout ? 6 : 10, 0.8f, 10f, scout ? this.art.scoutHull : this.art.bossHull);
       }
       case GameEvent.BossAppeared a -> audio.play2D(this.art.alarm, 0.8f, AudioBus.EFFECTS);
       case GameEvent.ShipDestroyed d -> {
@@ -184,6 +187,8 @@ final class WorldView {
       }
       case GameEvent.GameOver g -> {
       }
+      case GameEvent.ExtraLife l -> audio.play2D(this.art.extraLife, 0.8f, AudioBus.EFFECTS);
+      case GameEvent.Hyperspace h -> audio.play2D(this.art.warp, 0.9f, AudioBus.EFFECTS);
       }
     }
   }

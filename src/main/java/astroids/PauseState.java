@@ -6,7 +6,7 @@ import engine.render.UiCanvas;
 
 /**
  * The game stands still under a dimmed screen. Opened with P (or Start), or when the mouse is let go (Esc, or the
- * window losing focus); P again or a click goes on.
+ * window losing focus); P again or a click goes on, Q gives the game up and goes back to the title screen.
  */
 final class PauseState implements GameState {
   private final AstroidsGame game;
@@ -33,6 +33,12 @@ final class PauseState implements GameState {
       engine.states().push(new SettingsState(this.game));
       return;
     }
+    if (engine.input().wasActionPressed("quit")) {
+      engine.captureMouse(false);
+      engine.states().clear();
+      engine.states().push(new TitleState(this.game));
+      return;
+    }
     // a click into the window captures the mouse again: that goes on too
     if (engine.input().wasActionPressed("pause") || (!this.capturedAtStart && engine.isMouseCaptured())) {
       engine.captureMouse(true);
@@ -49,7 +55,7 @@ final class PauseState implements GameState {
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
     Hud.dim(ui, width, height, 0.5f);
     Hud.centered(ui, "PAUSED", width, height * 0.4f, 3f, 1f, 1f, 1f, 1f);
-    Hud.centered(ui, "P or click to continue      O  options", width, height * 0.4f + ui.lineHeight(3f) + 8f, 1.3f,
-        0.85f, 0.85f, 0.85f, 1f);
+    Hud.centered(ui, "P or click to continue      O  options      Q  quit to the title screen", width,
+        height * 0.4f + ui.lineHeight(3f) + 8f, 1.3f, 0.85f, 0.85f, 0.85f, 1f);
   }
 }

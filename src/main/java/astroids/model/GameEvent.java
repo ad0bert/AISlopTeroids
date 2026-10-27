@@ -16,13 +16,13 @@ public sealed interface GameEvent {
   record AsteroidDestroyed(Vector3f position, Asteroid.Size size) implements GameEvent {
   }
 
-  record BossAppeared(Vector3f position) implements GameEvent {
+  record BossAppeared(Vector3f position, Boss.Kind kind) implements GameEvent {
   }
 
   record BossHit(Vector3f position) implements GameEvent {
   }
 
-  record BossDestroyed(Vector3f position) implements GameEvent {
+  record BossDestroyed(Vector3f position, Boss.Kind kind, int points) implements GameEvent {
   }
 
   record BossLeft() implements GameEvent {
@@ -32,6 +32,14 @@ public sealed interface GameEvent {
   }
 
   record ShipRespawned() implements GameEvent {
+  }
+
+  /** The score passed another {@code ship.extraLifeEvery} points. */
+  record ExtraLife(int lives) implements GameEvent {
+  }
+
+  /** The ship jumped through hyperspace. */
+  record Hyperspace(Vector3f from, Vector3f to) implements GameEvent {
   }
 
   record GameOver(int score) implements GameEvent {

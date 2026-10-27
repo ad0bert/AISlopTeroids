@@ -8,6 +8,8 @@ public final class Bullet {
   public final Vector3f position = new Vector3f();
   public final Vector3f velocity = new Vector3f();
   public float timeLeft;
+  /** Whether a scout has already had its one chance to see this shot coming. */
+  public boolean dodgeRolled;
 
   public Bullet(boolean fromBoss) {
     this.fromBoss = fromBoss;

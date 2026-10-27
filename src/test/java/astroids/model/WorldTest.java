@@ -238,6 +238,178 @@ class WorldTest {
   }
 
   @Test
+  void everySoManyPointsBringAnExtraShip() {
+    final var t = new Tuning();
+    t.extraLifeEvery = 8 * t.scoreSmallRock;
+    final var w = World.newGame(2L, t);
+    w.clearAsteroids();
+    w.ship().invulnerable = 0f;
+    int extra = 0;
+    for (int i = 0; i < 9; i++) {
+      w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(0f, 0f, -10f), new Vector3f());
+      w.ship().fireCooldown = 0f;
+      w.step(DT, fireAt(new Vector3f(0f, 0f, -1f)));
+      run(w, 0.2f, Controls.NONE);
+      assertTrue(w.asteroids().isEmpty());
+      final long now = w.drainEvents().stream().filter(e -> e instanceof GameEvent.ExtraLife).count();
+      assertEquals(i == 7 ? 1 : 0, now, "rock " + (i + 1));
+      extra += (int) now;
+    }
+    assertEquals(1, extra);
+    assertEquals(t.lives + 1, w.lives());
+    assertEquals(10000, new Tuning().extraLifeEvery, "as in the original");
+  }
+
+  @Test
+  void bigScoresAtOnceCanBringSeveralShipsAndNoneWhenTurnedOff() {
+    final var t = new Tuning();
+    t.extraLifeEvery = 500;
+    t.scoreEnemyDestroyed = 1200;
+    final var w = World.newGame(3L, t);
+    w.clearAsteroids();
+    final var boss = w.summonBoss();
+    boss.health = 1;
+    boss.position.set(0f, 0f, -15f);
+    boss.velocity.zero();
+    boss.turnTimer = 100f;
+    w.step(DT, fireAt(new Vector3f(0f, 0f, -1f)));
+    run(w, 0.4f, Controls.NONE);
+    assertEquals(1200, w.score());
+    assertEquals(t.lives + 2, w.lives(), "500 and 1000 passed in one go");
+    assertTrue(w.drainEvents().contains(new GameEvent.ExtraLife(t.lives + 2)));
+
+    t.extraLifeEvery = 0;
+    final var none = World.newGame(3L, t);
+    none.clearAsteroids();
+    none.summonBoss().health = 1;
+    none.boss().position.set(0f, 0f, -15f);
+    none.boss().velocity.zero();
+    none.boss().turnTimer = 100f;
+    none.step(DT, fireAt(new Vector3f(0f, 0f, -1f)));
+    run(none, 0.4f, Controls.NONE);
+    assertEquals(1200, none.score());
+    assertEquals(t.lives, none.lives());
+  }
+
+  @Test
+  void hyperspaceJumpsSomewhereElseAndThenNeedsToCoolDown() {
+    final var w = empty();
+    final var jump = new Controls(new Vector3f(), new Vector3f(0f, 0f, -1f), false, true);
+    w.ship().velocity.set(5f, 0f, 0f);
+    w.step(DT, jump);
+    final var events = w.drainEvents();
+    final var hyper = events.stream().filter(e -> e instanceof GameEvent.Hyperspace).map(e -> (GameEvent.Hyperspace) e)
+        .findFirst().orElseThrow();
+    assertTrue(dist(hyper.from(), hyper.to()) > 1f, "somewhere else");
+    assertEquals(0f, w.ship().velocity.length(), 1e-4f, "it comes out standing still");
+    final var landed = new Vector3f(w.ship().position);
+    for (int i = 0; i < 3; i++) {
+      assertTrue(Math.abs(landed.get(i)) <= T.arena);
+    }
+
+    run(w, T.hyperspaceCooldown - 0.5f, jump);
+    assertTrue(w.drainEvents().stream().noneMatch(e -> e instanceof GameEvent.Hyperspace), "still cooling down");
+    run(w, 0.6f, jump);
+    assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.Hyperspace), "ready again");
+  }
+
+  @Test
+  void noJumpWhileTheShipIsGone() {
+    final var w = empty();
+    w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(w.ship().position), new Vector3f());
+    w.step(DT, Controls.NONE);
+    assertFalse(w.ship().alive);
+    w.step(DT, new Controls(new Vector3f(), new Vector3f(0f, 0f, -1f), false, true));
+    assertTrue(w.drainEvents().stream().noneMatch(e -> e instanceof GameEvent.Hyperspace));
+  }
+
+  private static World withScout(Tuning t) {
+    final var w = World.newGame(9L, t);
+    w.clearAsteroids();
+    w.ship().invulnerable = 1000f;
+    w.drainEvents();
+    final var scout = w.summon(Boss.Kind.SCOUT);
+    scout.position.set(0f, 0f, -30f);
+    scout.velocity.zero();
+    scout.turnTimer = 100f;
+    return w;
+  }
+
+  @Test
+  void theScoutTakesOneHitAndScoresMore() {
+    final var t = new Tuning();
+    t.scoutDodgeChance = 0f;
+    final var w = withScout(t);
+    assertEquals(World.SCOUT_RADIUS, w.boss().radius());
+    w.step(DT, fireAt(new Vector3f(0f, 0f, -1f)));
+    run(w, 0.6f, Controls.NONE);
+    assertNull(w.boss());
+    assertEquals(t.scoreScoutDestroyed, w.score());
+    assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.BossDestroyed d
+        && d.kind() == Boss.Kind.SCOUT && d.points() == t.scoreScoutDestroyed));
+  }
+
+  @Test
+  void aScoutThatSeesTheShotComingSwervesOutOfItsWay() {
+    final var t = new Tuning();
+    t.scoutDodgeChance = 1f;
+    final var w = withScout(t);
+    w.step(DT, fireAt(new Vector3f(0f, 0f, -1f)));
+    run(w, 0.6f, Controls.NONE);
+    assertNotNull(w.boss(), "it got out of the way");
+    assertTrue(w.boss().velocity.length() > 1f);
+    assertEquals(0f, w.boss().velocity.z, 1e-3f, "across the shot's path, not along it");
+    assertEquals(0, w.score());
+  }
+
+  @Test
+  void scoutsComeFromTheirWaveOnAndEnemiesComeSoonerLater() {
+    final var t = new Tuning();
+    t.scoutChance = 1f;
+    t.scoutFromWave = 2;
+    t.enemyMinDelay = 5f;
+    t.enemyMaxDelay = 5f;
+    t.firstWaveRocks = 1;
+    final var w = World.newGame(4L, t);
+    w.ship().invulnerable = 1000f;
+    assertEquals(5f, w.enemyDelay(), 1e-4f);
+    run(w, 5.1f, Controls.NONE);
+    assertNotNull(w.boss());
+    assertEquals(Boss.Kind.BIG, w.boss().kind, "wave 1: still the big one");
+
+    // on to wave 2: the wait after this one is shorter, and the next one is a scout
+    w.clearAsteroids();
+    run(w, t.waveDelay + 0.1f, Controls.NONE);
+    assertEquals(2, w.wave());
+    w.boss().timeLeft = 0.01f;
+    run(w, 0.05f, Controls.NONE);
+    assertNull(w.boss());
+    assertEquals(5f * (1f - t.enemyWaitCutPerWave), w.enemyDelay(), 0.1f, "a shorter wait in wave 2");
+    run(w, w.enemyDelay() + 0.1f, Controls.NONE);
+    assertNotNull(w.boss());
+    assertEquals(Boss.Kind.SCOUT, w.boss().kind);
+  }
+
+  @Test
+  void theWaitForEnemiesStopsShrinkingAtFortyPercent() {
+    final var t = new Tuning();
+    t.enemyMinDelay = 10f;
+    t.enemyMaxDelay = 10f;
+    t.enemyWaitCutPerWave = 0.5f;
+    t.firstWaveRocks = 1;
+    final var w = World.newGame(4L, t);
+    w.ship().invulnerable = 100000f;
+    for (int wave = 1; wave < 5; wave++) {
+      w.clearAsteroids();
+      run(w, t.waveDelay + 0.1f, Controls.NONE);
+    }
+    assertEquals(5, w.wave());
+    w.summonBoss().timeLeft = 0.01f;
+    run(w, 0.05f, Controls.NONE);
+    assertEquals(4f, w.enemyDelay(), 0.05f);
+  }
+
+  @Test
   void theAttractWorldHasNoShipAndNoBoss() {
     final var w = World.attract(3L, 6);
     assertNull(w.ship());
