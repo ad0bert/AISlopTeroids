@@ -121,6 +121,127 @@ final class Sounds {
     return AudioData.mono(RATE, out);
   }
 
+  // ----- ambience: loops that join without a click (every tone and swell repeats a whole number of times per loop)
+
+  /** One tone of a drone: frequency, loudness, and how many slow swells per loop (with a phase, in loops). */
+  private record Tone(double freq, float level, int swells, double phase) {
+  }
+
+  /** The title screen: a slow, open drone in A with a faint shimmer above and soft space wind. Stereo, 24 seconds. */
+  static AudioData titleAmbience() {
+    final float seconds = 24f;
+    final Tone[] left = { new Tone(55, 0.20f, 1, 0.0), new Tone(82.5, 0.20f, 2, 0.3), new Tone(110, 0.16f, 3, 0.6),
+        new Tone(165, 0.10f, 2, 0.1), new Tone(220, 0.07f, 3, 0.4), new Tone(330, 0.045f, 4, 0.9),
+        new Tone(440, 0.025f, 5, 0.25), new Tone(880, 0.012f, 3, 0.2), new Tone(1320, 0.008f, 4, 0.7) };
+    final Tone[] right = { new Tone(55.25, 0.20f, 1, 0.5), new Tone(82.5, 0.20f, 2, 0.8), new Tone(110.25, 0.16f, 3, 0.1),
+        new Tone(165, 0.10f, 2, 0.6), new Tone(220.25, 0.07f, 3, 0.9), new Tone(330, 0.045f, 4, 0.4),
+        new Tone(440.25, 0.025f, 5, 0.75), new Tone(880.25, 0.012f, 3, 0.9), new Tone(1320, 0.008f, 4, 0.2) };
+    return stereo(drone(seconds, left, 0.16f, 0.09f, 5L), drone(seconds, right, 0.16f, 0.09f, 6L), 0.45f);
+  }
+
+  /** In the game: darker and lower, with a deeper rumble under it. Stereo, 20 seconds. */
+  static AudioData playAmbience() {
+    final float seconds = 20f;
+    final Tone[] left = { new Tone(41.2, 0.20f, 1, 0.0), new Tone(61.8, 0.14f, 2, 0.4), new Tone(82.4, 0.12f, 3, 0.2),
+        new Tone(98, 0.06f, 1, 0.7), new Tone(123.6, 0.06f, 2, 0.15), new Tone(164.8, 0.035f, 3, 0.55),
+        new Tone(246.95, 0.02f, 4, 0.85), new Tone(493.9, 0.008f, 5, 0.3) };
+    final Tone[] right = { new Tone(41.25, 0.20f, 1, 0.5), new Tone(61.8, 0.14f, 2, 0.9), new Tone(82.45, 0.12f, 3, 0.7),
+        new Tone(98, 0.06f, 1, 0.2), new Tone(123.6, 0.06f, 2, 0.65), new Tone(164.85, 0.035f, 3, 0.05),
+        new Tone(246.95, 0.02f, 4, 0.35), new Tone(493.9, 0.008f, 5, 0.8) };
+    return stereo(drone(seconds, left, 0.18f, 0.05f, 7L), drone(seconds, right, 0.18f, 0.05f, 8L), 0.45f);
+  }
+
+  /** The ship's engine: a low hum with a little hiss, 2 seconds; the game sets its pitch and volume by speed. */
+  static AudioData engineHum() {
+    final float seconds = 2f;
+    final var tones = new Tone[6];
+    for (int h = 1; h <= tones.length; h++) {
+      tones[h - 1] = new Tone(55 * h, 0.3f / h, h % 2 == 0 ? 2 : 1, h * 0.17);
+    }
+    return AudioData.mono(RATE, normalize(drone(seconds, tones, 0.12f, 0.3f, 9L), 0.5f));
+  }
+
+  /** While an enemy ship is about: a low, slightly sour throb, two beats a second. 4 seconds. */
+  static AudioData danger() {
+    final float seconds = 4f;
+    final int n = (int) (RATE * seconds);
+    final float[] out = new float[n];
+    for (int i = 0; i < n; i++) {
+      final double t = (double) i / RATE;
+      final double beat = Math.pow(0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * t - Math.PI / 2), 3); // 2 per second
+      final double tone = Math.sin(2 * Math.PI * 73.5 * t) + 0.6 * Math.sin(2 * Math.PI * 77.75 * t)
+          + 0.7 * Math.sin(2 * Math.PI * 147 * t) + 0.5 * Math.sin(2 * Math.PI * 220.5 * t)
+          + 0.3 * Math.sin(2 * Math.PI * 311 * t) + 0.12 * Math.sin(2 * Math.PI * 441 * t);
+      out[i] = (float) (tone * beat);
+    }
+    return AudioData.mono(RATE, normalize(out, 0.5f));
+  }
+
+  /**
+   * Tones that swell and fade slowly, plus filtered noise (a wind whose brightness drifts). The tones repeat exactly
+   * over the loop; the noise is made a little longer and its end faded into its start.
+   */
+  private static float[] drone(float seconds, Tone[] tones, float wind, float brightness, long seed) {
+    final int n = (int) (RATE * seconds);
+    final int fade = RATE; // one second of noise crossfade
+    final float[] noise = new float[n + fade];
+    final var rnd = new Random(seed);
+    float lp = 0f;
+    float lp2 = 0f;
+    for (int i = 0; i < noise.length; i++) {
+      final double u = (double) (i % n) / n;
+      final float cutoff = brightness * (float) (0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * u));
+      lp += (0.002f + cutoff) * ((rnd.nextFloat() * 2f - 1f) - lp);
+      lp2 += (0.002f + cutoff) * (lp - lp2);
+      noise[i] = lp2;
+    }
+    final float[] out = new float[n];
+    for (int i = 0; i < n; i++) {
+      final double t = (double) i / RATE;
+      final double u = (double) i / n;
+      double v = 0;
+      for (Tone tone : tones) {
+        final double swell = 0.55 + 0.45 * Math.sin(2 * Math.PI * (tone.swells() * u + tone.phase()));
+        final double phase = 2 * Math.PI * tone.freq() * t;
+        // soft overtones, so that low tones are heard on small speakers too
+        v += tone.level() * swell * (Math.sin(phase) + 0.35 * Math.sin(2 * phase) + 0.18 * Math.sin(3 * phase)
+            + 0.08 * Math.sin(4 * phase));
+      }
+      float w = noise[i];
+      if (i < fade) { // the loop's start blends in from the noise just after its end
+        final float k = (float) i / fade;
+        w = noise[i] * k + noise[i + n] * (1f - k);
+      }
+      out[i] = (float) v + wind * 6f * w;
+    }
+    return out;
+  }
+
+  /** Scales so that the loudest sample is {@code peak}. */
+  private static float[] normalize(float[] samples, float peak) {
+    float max = 1e-6f;
+    for (float s : samples) {
+      max = Math.max(max, Math.abs(s));
+    }
+    for (int i = 0; i < samples.length; i++) {
+      samples[i] *= peak / max;
+    }
+    return samples;
+  }
+
+  private static AudioData stereo(float[] left, float[] right, float peak) {
+    float max = 1e-6f;
+    for (int i = 0; i < left.length; i++) {
+      max = Math.max(max, Math.max(Math.abs(left[i]), Math.abs(right[i])));
+    }
+    final short[] out = new short[left.length * 2];
+    for (int i = 0; i < left.length; i++) {
+      out[2 * i] = (short) Math.round(left[i] * peak / max * Short.MAX_VALUE);
+      out[2 * i + 1] = (short) Math.round(right[i] * peak / max * Short.MAX_VALUE);
+    }
+    return new AudioData(RATE, 2, out);
+  }
+
   private static AudioData zap(float seconds, float from, float to, float volume) {
     final int n = (int) (RATE * seconds);
     final float[] out = new float[n];

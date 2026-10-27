@@ -10,6 +10,7 @@ import astroids.model.Controls;
 import astroids.model.Difficulty;
 import astroids.model.GameEvent;
 import astroids.model.World;
+import engine.audio.AudioSource;
 import engine.core.Engine;
 import engine.core.LevelState;
 import engine.ecs.Entity;
@@ -47,6 +48,9 @@ final class PlayState extends LevelState {
   private float messageUntil;
   private float flash;
   private float warpFlash;
+  /** Ambience that follows the game: the engine (by speed) and a throb while an enemy ship is about. */
+  private AudioSource hum;
+  private AudioSource danger;
 
   private final Vector3f forward = new Vector3f();
   private final Vector3f right = new Vector3f();
@@ -65,6 +69,10 @@ final class PlayState extends LevelState {
     this.world = World.newGame(System.nanoTime(), this.game.tuning().tuning());
     this.view = new WorldView(engine, this.game.art());
     this.camera = this.game.art().addBackdrop(engine.scene());
+    final var art = this.game.art();
+    art.addLoop(engine.scene(), "ambience", art.playAmbience, 0.7f);
+    this.hum = art.addLoop(engine.scene(), "engine hum", art.engineHum, 0f);
+    this.danger = art.addLoop(engine.scene(), "danger", art.danger, 0f);
     this.wasCaptured = engine.isMouseCaptured();
     afterStep(engine, 0f);
   }
@@ -165,6 +173,7 @@ final class PlayState extends LevelState {
     this.view.play(events);
     this.flash = Math.max(0f, this.flash - dt * 1.5f);
     this.warpFlash = Math.max(0f, this.warpFlash - dt * 2f);
+    followAmbience(dt);
     for (GameEvent e : events) {
       switch (e) {
       case GameEvent.WaveStarted w -> say("WAVE " + w.wave(), 2.5f);
@@ -186,6 +195,22 @@ final class PlayState extends LevelState {
       }
       }
     }
+  }
+
+  /** The engine hums louder and higher the faster the ship goes; the throb swells while an enemy ship is about. */
+  private void followAmbience(float dt) {
+    final var ship = this.world.ship();
+    final float speed = ship.alive && !this.world.isGameOver()
+        ? Math.min(1f, ship.velocity.length() / this.world.tuning().shipMaxSpeed) : -1f;
+    final float humTarget = speed < 0f ? 0f : 0.12f + 0.4f * speed;
+    this.hum.volume = approach(this.hum.volume, humTarget, dt * 1.5f);
+    this.hum.pitch = 0.8f + 0.5f * Math.max(0f, speed);
+    final float dangerTarget = this.world.boss() != null && !this.world.isGameOver() ? 0.6f : 0f;
+    this.danger.volume = approach(this.danger.volume, dangerTarget, dt * 0.5f);
+  }
+
+  private static float approach(float value, float target, float step) {
+    return value < target ? Math.min(target, value + step) : Math.max(target, value - step);
   }
 
   private void say(String text, float seconds) {

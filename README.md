@@ -27,8 +27,11 @@ The graphics are kept as simple as possible: low-poly rocks, glowing shots, a st
 
 The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
 
-The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, fullscreen, vsync and the
-radar. Changes take effect at once and are saved in your user config directory.
+The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, ambience volume, fullscreen,
+vsync and the radar. Changes take effect at once and are saved in your user config directory.
+
+Ambience: the title screen has a slow, airy drone. In the game, a darker drone plays under the engine hum, which rises
+with your speed, and a low throb swells while an enemy ship is around.
 
 ### Rules
 
@@ -121,7 +124,7 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 | `astroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, enemy ships, ship, waves, score) steps by a fixed time step and reports `GameEvent`s, with its numbers from a `Tuning` (a `Difficulty`'s values, plus `tuning.properties`). Deterministic for a seed and a tuning, and unit-tested. |
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. `GameOverState` takes the name for the score table. |
-| `Art`, `Sounds` | Meshes, materials and synthesized sounds, made once at start-up. |
+| `Art`, `Sounds` | Meshes, materials and synthesized sounds (effects and seamless ambience loops), made once at start-up. |
 | `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, score tables, and the radar. |
 | `HighScores` | The ten best games of each difficulty, kept in the scores file. |
 | `Options`, `SettingsState` | The player's options (saved with the engine's `Settings`) and the panel that edits them (engine `Gui`). |

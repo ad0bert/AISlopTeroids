@@ -41,6 +41,7 @@ final class TitleState extends LevelState {
     this.clicks = new Clicks(engine.input());
     this.view.sync(this.world, new Vector3f(), 0f);
     this.table = this.game.highScores(this.game.options().difficulty);
+    this.game.art().addLoop(engine.scene(), "ambience", this.game.art().titleAmbience, 0.8f);
   }
 
   @Override
