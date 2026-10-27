@@ -32,8 +32,8 @@ public final class World {
   public static final float SMALL_RADIUS = 2.5f;
   public static final float SHIP_RADIUS = 1f;
   public static final float BULLET_RADIUS = 0.3f;
-  public static final float BOSS_RADIUS = 2f;
-  public static final float SCOUT_RADIUS = 1.2f;
+  public static final float BOSS_RADIUS = 2.4f;
+  public static final float SCOUT_RADIUS = 1.44f;
   /** A scout notices player shots this close (and heading its way). */
   static final float DODGE_RANGE = 18f;
 

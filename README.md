@@ -6,7 +6,7 @@ around on every side. Big rocks split in two when shot, small ones shatter, and 
 and shoots at you. Pick Easy, Normal or Hard on the title screen; each keeps its own table of the ten best games.
 
 The graphics are kept simple: lumpy, cratered rocks (twelve different shapes) with a rock texture and a bump map,
-glowing shots, a star field, flat colours. Everything (meshes, textures, sounds) is generated in code; the repository
+polished enemy ships that reflect the space around them, glowing shots, a star field. Everything (meshes, textures, sounds) is generated in code; the repository
 has no asset files.
 
 ## Play
@@ -127,6 +127,7 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. `GameOverState` takes the name for the score table. |
 | `RockArt` | The rocks' shapes (a sphere pushed in and out by random lumps and craters, one per seed) and their surface: a seamless height field turned into a colour texture and a bump map. Also the sharp-edged chips and the dust cloud a rock breaks into (`Debris`, `Dust`). |
+| `ShipArt` | The enemy ships' parts, turned on a lathe from profiles (hulls, rim band, domes, engine plate), and the space around everything as a sky image (a sun, a planet's blue shine, a faint nebula) for the polished hulls to reflect. |
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds (effects and seamless ambience loops), made once at start-up. |
 | `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, score tables, and the radar. |
 | `HighScores` | The ten best games of each difficulty, kept in the scores file. |

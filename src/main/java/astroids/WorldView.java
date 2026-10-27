@@ -135,20 +135,21 @@ final class WorldView {
 
   private Entity newBoss(Boss.Kind kind) {
     final boolean scout = kind == Boss.Kind.SCOUT;
-    final float r = kind.radius;
     final var e = new Entity(scout ? "scout" : "boss");
-    e.add(new MeshRenderer(this.art.ball, scout ? this.art.scoutHull : this.art.bossHull));
-    e.transform().scale().set(r * 1.1f, r * (scout ? 0.28f : 0.35f), r * 1.1f);
-    final var dome = new Entity(scout ? "scout dome" : "boss dome");
-    dome.add(new MeshRenderer(this.art.ball, scout ? this.art.scoutDome : this.art.bossDome));
-    dome.transform().position().set(0f, 0.6f, 0f);
-    dome.transform().scale().set(0.45f, 1.1f, 0.45f);
-    dome.transform().setParent(e.transform());
-    this.scene.add(dome);
-    this.attached.computeIfAbsent(e, k -> new ArrayList<>()).add(dome);
+    e.transform().scale().set(kind.radius); // the parts are made for radius 1
     final var glow = scout ? Light.point(1f, 0.7f, 0.15f, 3f, 20f) : Light.point(1f, 0.25f, 0.15f, 4f, 30f);
     glow.castShadows = false;
     e.add(glow);
+    for (var part : scout ? this.art.scoutParts : this.art.bossParts) {
+      final var p = new Entity(e.name() + " part");
+      p.add(new MeshRenderer(part.mesh(), part.material()));
+      p.transform().position().set(part.position());
+      p.transform().rotation().set(part.rotation());
+      p.transform().scale().set(part.scale());
+      p.transform().setParent(e.transform());
+      this.scene.add(p);
+      this.attached.computeIfAbsent(e, k -> new ArrayList<>()).add(p);
+    }
     return e;
   }
 
