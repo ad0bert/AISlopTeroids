@@ -15,6 +15,13 @@ final class SettingsState implements GameState {
 
   private final AstroidsGame game;
   private Gui gui;
+  /**
+   * False until the panel has been drawn once. Engine 0.8.2's Gui counts every click made before it existed (firing in
+   * the game, the click that paused it) as a click in its first frame, on whatever is under the pointer: that changed
+   * a setting just by opening the panel. The first frame is drawn without the mouse, which also lets the Gui take in
+   * the click counts as they are.
+   */
+  private boolean settled;
   private boolean done;
 
   SettingsState(AstroidsGame game) {
@@ -51,7 +58,8 @@ final class SettingsState implements GameState {
     Hud.dim(ui, width, height, 0.55f);
     final var o = this.game.options();
     final var g = this.gui;
-    g.begin(ui, width, height, true);
+    g.begin(ui, width, height, this.settled);
+    this.settled = true;
     g.beginPanel("Options", (width - PANEL_WIDTH) / 2f, height * 0.18f, PANEL_WIDTH);
     g.label("Controls");
     o.mouseSensitivity = g.slider("Mouse sensitivity", o.mouseSensitivity, Options.MIN_SENSITIVITY,
