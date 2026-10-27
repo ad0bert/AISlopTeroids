@@ -77,6 +77,32 @@ class RockArtTest {
   }
 
   @Test
+  void chipsAreSharpEdgedBrokenPiecesOfAboutUnitSize() {
+    final var m = RockArt.chip(2000L);
+    assertEquals(0, m.vertexCount() % 3, "every triangle has its own corners");
+    for (int t = 0; t < m.vertexCount(); t += 3) {
+      final var n = normal(m, t);
+      assertEquals(0f, n.distance(normal(m, t + 1)), 1e-6f, "flat faces: one normal per triangle");
+      assertEquals(0f, n.distance(normal(m, t + 2)), 1e-6f);
+      final var centre = position(m, t).add(position(m, t + 1)).add(position(m, t + 2));
+      assertTrue(n.dot(centre) > 0f, "facing outwards");
+    }
+    for (int i = 0; i < m.vertexCount(); i++) {
+      assertTrue(position(m, i).length() <= 1.2f);
+    }
+    assertFalse(Arrays.equals(m.vertices(), RockArt.chip(2001L).vertices()));
+  }
+
+  @Test
+  void dustFillsABallThickerInTheMiddle() {
+    final var points = RockArt.dust(400, 3L);
+    assertEquals(400, points.size());
+    long inner = points.stream().filter(p -> p.length() < 0.5f).count();
+    assertTrue(points.stream().allMatch(p -> p.length() <= 1f));
+    assertTrue(inner > 400 * 0.125, "more than an even spread would put in the inner half: " + inner);
+  }
+
+  @Test
   void theSurfaceTilesWithoutASeam() {
     final int size = RockArt.TEXTURE_SIZE;
     final float[] h = RockArt.heights(size, 7L);

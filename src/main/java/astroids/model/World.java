@@ -377,7 +377,7 @@ public final class World {
     if (scored) {
       addScore(a.size == Asteroid.Size.BIG ? this.t.scoreBigRock : this.t.scoreSmallRock);
     }
-    this.events.add(new GameEvent.AsteroidDestroyed(new Vector3f(a.position), a.size));
+    this.events.add(new GameEvent.AsteroidDestroyed(new Vector3f(a.position), a.size, new Vector3f(a.velocity)));
     if (a.size == Asteroid.Size.BIG) {
       // the two halves fly apart across the parent's path
       final var apart = randomDirection(this.tmp2);

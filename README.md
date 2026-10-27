@@ -126,7 +126,7 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 | `astroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, enemy ships, ship, waves, score) steps by a fixed time step and reports `GameEvent`s, with its numbers from a `Tuning` (a `Difficulty`'s values, plus `tuning.properties`). Deterministic for a seed and a tuning, and unit-tested. |
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. `GameOverState` takes the name for the score table. |
-| `RockArt` | The rocks' shapes (a sphere pushed in and out by random lumps and craters, one per seed) and their surface: a seamless height field turned into a colour texture and a bump map. |
+| `RockArt` | The rocks' shapes (a sphere pushed in and out by random lumps and craters, one per seed) and their surface: a seamless height field turned into a colour texture and a bump map. Also the sharp-edged chips and the dust cloud a rock breaks into (`Debris`, `Dust`). |
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds (effects and seamless ambience loops), made once at start-up. |
 | `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, score tables, and the radar. |
 | `HighScores` | The ten best games of each difficulty, kept in the scores file. |

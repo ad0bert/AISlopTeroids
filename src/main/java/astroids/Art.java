@@ -27,6 +27,10 @@ import engine.audio.AudioListener;
 final class Art {
   /** Rock shapes, all different; each asteroid gets one ({@link astroids.model.Asteroid#variant}). */
   final GpuMesh[] rocks = new GpuMesh[ROCK_SHAPES];
+  /** Broken-off chips for the debris of a rock that is hit. */
+  final GpuMesh[] chips = new GpuMesh[8];
+  /** A ball of points: the dust of a rock that is hit, scaled up as it spreads. */
+  final GpuMesh dust;
   final GpuMesh ball;
   final GpuMesh cube;
   final GpuMesh stars;
@@ -69,6 +73,10 @@ final class Art {
     for (int i = 0; i < this.rocks.length; i++) {
       this.rocks[i] = res.mesh("gen:rock-" + i, RockArt.mesh(ROCK_SEED + i));
     }
+    for (int i = 0; i < this.chips.length; i++) {
+      this.chips[i] = res.mesh("gen:chip-" + i, RockArt.chip(2000L + i));
+    }
+    this.dust = res.mesh("gen:dust", MeshFactory.points(RockArt.dust(260, 3L)));
     // one rock surface for all of them: a colour texture and a bump map from the same heights
     final float[] heights = RockArt.heights(RockArt.TEXTURE_SIZE, 7L);
     final var rockTexture = res.texture("gen:rock-albedo", RockArt.albedo(heights, RockArt.TEXTURE_SIZE, 8L));
@@ -109,6 +117,14 @@ final class Art {
     final var settings = engine.backend().settings();
     settings.sky = null;
     settings.clearColor.set(0.005f, 0.006f, 0.02f);
+  }
+
+  /** Its own material for one dust cloud (it fades on its own): unlit, see-through rock colour. */
+  Material dustMaterial(boolean big) {
+    final var m = new Material().color(big ? 0.62f : 0.70f, big ? 0.58f : 0.62f, big ? 0.54f : 0.52f, 0.8f).unlit()
+        .transparent();
+    m.pointSize = 3f;
+    return m;
   }
 
   /** Black with a bright emissive colour: shots and engine glow, picked up by the bloom. */

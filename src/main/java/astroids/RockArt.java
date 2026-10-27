@@ -191,6 +191,99 @@ final class RockArt {
     return new Vector3f(r * (float) Math.cos(a), r * (float) Math.sin(a), z);
   }
 
+  // ----- chips
+
+  /**
+   * A chip of rock for debris, about radius 1: few, flat faces at random distances and a random stretch, so it looks
+   * broken off rather than round. The faces are flat (each triangle has its own normal) to show the sharp edges.
+   */
+  static MeshData chip(long seed) {
+    final var rnd = new Random(seed);
+    final int segments = 6;
+    final int rings = 4;
+    final int cols = segments + 1;
+    // one radius per point; the seam's and the poles' copies share theirs
+    final float[] radius = new float[cols * (rings + 1)];
+    for (int i = 0; i < radius.length; i++) {
+      radius[i] = 0.55f + 0.6f * rnd.nextFloat();
+    }
+    final var stretch = new Vector3f(0.5f + 0.8f * rnd.nextFloat(), 0.4f + 0.6f * rnd.nextFloat(),
+        0.6f + 0.8f * rnd.nextFloat());
+    stretch.div(Math.max(stretch.x, Math.max(stretch.y, stretch.z)));
+    final Vector3f[] pos = new Vector3f[radius.length];
+    for (int r = 0; r <= rings; r++) {
+      final double phi = Math.PI * r / rings;
+      for (int s = 0; s < cols; s++) {
+        final double theta = 2 * Math.PI * s / segments;
+        final int i = r * cols + s;
+        final float rad = radius[chipPoint(i, cols, segments, rings)];
+        pos[i] = new Vector3f((float) (Math.cos(theta) * Math.sin(phi)), (float) -Math.cos(phi),
+            (float) (-Math.sin(theta) * Math.sin(phi))).mul(rad).mul(stretch);
+      }
+    }
+    final int triangles = segments * rings * 2;
+    final float[] v = new float[triangles * 3 * MeshData.INPUT_FLOATS_PER_VERTEX];
+    final int[] idx = new int[triangles * 3];
+    int vi = 0;
+    int t = 0;
+    final var e1 = new Vector3f();
+    final var e2 = new Vector3f();
+    for (int r = 0; r < rings; r++) {
+      for (int s = 0; s < segments; s++) {
+        final int a = r * cols + s;
+        final int b = a + cols;
+        for (int[] tri : new int[][] { { a, a + 1, b + 1 }, { a, b + 1, b } }) {
+          pos[tri[1]].sub(pos[tri[0]], e1);
+          pos[tri[2]].sub(pos[tri[0]], e2);
+          final var n = e1.cross(e2, new Vector3f());
+          if (n.lengthSquared() < 1e-12f) {
+            n.set(pos[tri[0]]); // a pole's sliver: any outward normal will do
+          }
+          n.normalize();
+          final var centre = new Vector3f(pos[tri[0]]).add(pos[tri[1]]).add(pos[tri[2]]);
+          if (n.dot(centre) < 0f) {
+            n.negate();
+          }
+          for (int k : tri) {
+            v[vi++] = pos[k].x;
+            v[vi++] = pos[k].y;
+            v[vi++] = pos[k].z;
+            v[vi++] = n.x;
+            v[vi++] = n.y;
+            v[vi++] = n.z;
+            v[vi++] = (float) (k % cols) / segments * 0.5f; // a small piece of the rock surface
+            v[vi++] = (float) (k / cols) / rings * 0.5f;
+            idx[t] = t;
+            t++;
+          }
+        }
+      }
+    }
+    return MeshData.triangles(v, idx);
+  }
+
+  private static int chipPoint(int i, int cols, int segments, int rings) {
+    final int r = i / cols;
+    final int s = i % cols;
+    if (r == 0) {
+      return 0;
+    }
+    if (r == rings) {
+      return rings * cols;
+    }
+    return r * cols + (s == segments ? 0 : s);
+  }
+
+  /** Points spread through a ball of radius 1, thicker towards the middle: a cloud of dust. */
+  static java.util.List<Vector3f> dust(int count, long seed) {
+    final var rnd = new Random(seed);
+    final var points = new java.util.ArrayList<Vector3f>(count);
+    for (int i = 0; i < count; i++) {
+      points.add(randomDirection(rnd).mul((float) Math.pow(rnd.nextFloat(), 1.5)));
+    }
+    return points;
+  }
+
   // ----- surface
 
   /**

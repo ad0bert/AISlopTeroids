@@ -162,8 +162,7 @@ final class WorldView {
       case GameEvent.AsteroidDestroyed d -> {
         final boolean big = d.size() == Asteroid.Size.BIG;
         sound(big ? this.art.bigBoom : this.art.smallBoom, d.position(), 1f, 0.9f + 0.2f * this.random.nextFloat());
-        burst(d.position(), big ? 14 : 8, big ? 1.4f : 0.9f, big ? 12f : 9f,
-            big ? this.art.rockMaterial : this.art.smallRockMaterial);
+        rockBurst(d.position(), d.velocity(), big);
       }
       case GameEvent.BossHit h -> {
         sound(this.art.clang, h.position(), 1f, 1f);
@@ -195,6 +194,58 @@ final class WorldView {
 
   private void sound(AudioClip clip, Vector3f position, float volume, float pitch) {
     this.engine.audio().play(clip, shown(position, new Vector3f()), volume, pitch, AudioBus.EFFECTS, 1);
+  }
+
+  /**
+   * A rock breaking up: chips of rock of all sizes (many small, a few large) flung out from all through it and flying on
+   * with its motion, a cloud of dust spreading and fading, and a few sparks where it was hit.
+   */
+  private void rockBurst(Vector3f position, Vector3f rockVelocity, boolean big) {
+    final var at = shown(position, new Vector3f());
+    final float radius = big ? World.BIG_RADIUS : World.SMALL_RADIUS;
+    final var material = big ? this.art.rockMaterial : this.art.smallRockMaterial;
+    final int chips = big ? 26 : 14;
+    for (int i = 0; i < chips; i++) {
+      final var dir = randomDirection(new Vector3f());
+      final float share = 0.12f + 0.88f * (float) Math.pow(this.random.nextFloat(), 3); // mostly small
+      final float size = radius * 0.3f * share;
+      final float speed = (big ? 7f : 6f) * (0.6f + 0.8f * this.random.nextFloat()) / (0.35f + share);
+      final var e = new Entity("rock chip");
+      e.add(new MeshRenderer(this.art.chips[this.random.nextInt(this.art.chips.length)], material));
+      e.transform().position().set(at).fma(radius * 0.6f * this.random.nextFloat(), dir);
+      e.transform().rotation().rotationAxis((float) (2 * Math.PI * this.random.nextFloat()),
+          randomDirection(new Vector3f()));
+      e.transform().scale().set(size);
+      e.add(new Debris(this.scene, new Vector3f(dir).mul(speed).add(rockVelocity), randomDirection(new Vector3f()),
+          1f + 5f * this.random.nextFloat(), 1.6f + 1.6f * this.random.nextFloat(), size, 0.35f, 0.15f));
+      this.scene.add(e);
+    }
+    final var cloud = new Entity("dust");
+    final var dustMaterial = this.art.dustMaterial(big);
+    cloud.add(new MeshRenderer(this.art.dust, dustMaterial));
+    cloud.transform().position().set(at);
+    cloud.transform().rotation().rotationAxis((float) (2 * Math.PI * this.random.nextFloat()),
+        randomDirection(new Vector3f()));
+    cloud.add(new Dust(this.scene, dustMaterial, new Vector3f(rockVelocity).mul(0.9f), radius * 0.6f,
+        radius * (big ? 3.2f : 2.6f), 1.4f + 0.6f * this.random.nextFloat()));
+    this.scene.add(cloud);
+    for (int i = 0; i < 5; i++) { // sparks: quick and bright
+      final var e = new Entity("spark");
+      e.add(new MeshRenderer(this.art.ball, this.art.fire));
+      e.transform().position().set(at);
+      final float size = 0.08f + 0.08f * this.random.nextFloat();
+      e.transform().scale().set(size);
+      e.add(new Debris(this.scene, randomDirection(new Vector3f()).mul(18f + 14f * this.random.nextFloat())
+          .add(rockVelocity), new Vector3f(0f, 1f, 0f), 0f, 0.2f + 0.2f * this.random.nextFloat(), size));
+      this.scene.add(e);
+    }
+  }
+
+  private Vector3f randomDirection(Vector3f dest) {
+    final float z = this.random.nextFloat() * 2f - 1f;
+    final float a = (float) (2 * Math.PI * this.random.nextFloat());
+    final float r = (float) Math.sqrt(1f - z * z);
+    return dest.set(r * (float) Math.cos(a), r * (float) Math.sin(a), z);
   }
 
   private void burst(Vector3f position, int count, float size, float speed, Material material) {
