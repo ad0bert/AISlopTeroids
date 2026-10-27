@@ -1,12 +1,14 @@
 package astroids;
 
+import astroids.model.Difficulty;
 import engine.audio.AudioBus;
 import engine.core.Engine;
 import engine.core.Settings;
 
 /**
- * The player's choices: mouse sensitivity, inverted look, volumes, fullscreen, vsync and the radar. Kept in the
- * engine's {@link Settings} file in the user's config directory, so they survive restarts.
+ * The player's choices: mouse sensitivity, inverted look, volumes, fullscreen, vsync, the radar, and the difficulty
+ * (picked on the title screen). Kept in the engine's {@link Settings} file in the user's config directory, so they
+ * survive restarts.
  */
 final class Options {
   static final float MIN_SENSITIVITY = 0.02f;
@@ -21,6 +23,7 @@ final class Options {
   boolean fullscreen;
   boolean vsync = true;
   boolean radar = true;
+  Difficulty difficulty = Difficulty.NORMAL;
 
   /** The options in {@code settings}, with the window's current state as the default for fullscreen and vsync. */
   static Options load(Settings settings, boolean fullscreen, boolean vsync) {
@@ -33,6 +36,7 @@ final class Options {
     o.fullscreen = settings.getBoolean("video.fullscreen", fullscreen);
     o.vsync = settings.getBoolean("video.vsync", vsync);
     o.radar = settings.getBoolean("hud.radar", true);
+    o.difficulty = Difficulty.parse(settings.get("game.difficulty", Difficulty.NORMAL.name()));
     return o;
   }
 
@@ -43,7 +47,8 @@ final class Options {
         .set("audio.effects", this.effectsVolume)
         .set("video.fullscreen", this.fullscreen)
         .set("video.vsync", this.vsync)
-        .set("hud.radar", this.radar);
+        .set("hud.radar", this.radar)
+        .set("game.difficulty", this.difficulty.name());
   }
 
   /** Puts the volumes, fullscreen and vsync into effect. */

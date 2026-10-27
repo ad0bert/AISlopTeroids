@@ -5,7 +5,9 @@ import java.util.Locale;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
+import astroids.model.Boss;
 import astroids.model.Controls;
+import astroids.model.Difficulty;
 import astroids.model.GameEvent;
 import astroids.model.World;
 import engine.core.Engine;
@@ -17,8 +19,8 @@ import engine.render.UiCanvas;
 
 /**
  * A game in progress: the player's ship is the camera. Mouse (or right stick) looks, W/S thrust along the view, A/D
- * slide, Space/Shift rise and sink, click or Ctrl fires. The ship keeps drifting after letting go of thrust, as in the
- * original.
+ * slide, Space/Shift rise and sink, click or Ctrl fires, E jumps through hyperspace. The ship keeps drifting after
+ * letting go of thrust, as in the original.
  *
  * <p>
  * {@code -Dastroids.autopilot=true} flies by itself (turning and firing), for screenshots and smoke tests.
@@ -38,11 +40,13 @@ final class PlayState extends LevelState {
   private boolean wasCaptured;
   /** Played with changed numbers from tuning.properties: labelled, and it sets no best score. */
   private boolean custom;
+  private Difficulty difficulty;
   private float time;
 
   private String message = "";
   private float messageUntil;
   private float flash;
+  private float warpFlash;
 
   private final Vector3f forward = new Vector3f();
   private final Vector3f right = new Vector3f();
@@ -56,6 +60,7 @@ final class PlayState extends LevelState {
 
   @Override
   protected void build(Engine engine) {
+    this.difficulty = this.game.options().difficulty;
     this.custom = this.game.loadTuning().custom();
     this.world = World.newGame(System.nanoTime(), this.game.tuning().tuning());
     this.view = new WorldView(engine, this.game.art());
@@ -91,11 +96,13 @@ final class PlayState extends LevelState {
     }
     boolean fire = input.isActionDown("fire") || (engine.isMouseCaptured()
         && input.isMouseDown(InputState.BUTTON_LEFT));
+    boolean jump = input.wasActionPressed("hyperspace");
     if (this.autopilot) {
       this.thrust.set(this.forward).mul(0.3f);
       fire = true;
+      jump = this.time > 4f && this.world.ship().hyperspaceCooldown <= 0f; // shows the jump in smoke runs
     }
-    this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire));
+    this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire, jump));
     afterStep(engine, dt);
 
     if (!this.world.isGameOver()) {
@@ -146,33 +153,35 @@ final class PlayState extends LevelState {
   /** Brings the view up to date with the world and reacts to what happened. */
   private void afterStep(Engine engine, float dt) {
     final var ship = this.world.ship();
+    final var events = this.world.drainEvents();
     final var p = this.camera.transform().position();
-    final boolean jumped = p.distanceSquared(ship.position) > this.world.arena() * this.world.arena();
+    final boolean jumped = p.distanceSquared(ship.position) > this.world.arena() * this.world.arena()
+        || events.stream().anyMatch(e -> e instanceof GameEvent.Hyperspace);
     p.set(ship.position);
     if (jumped) {
-      this.camera.transform().snapshot(); // flew through a wall, or came back in the middle
+      this.camera.transform().snapshot(); // flew through a wall, came back in the middle, or jumped
     }
-    final var events = this.world.drainEvents();
     this.view.sync(this.world, ship.position, dt);
     this.view.play(events);
     this.flash = Math.max(0f, this.flash - dt * 1.5f);
+    this.warpFlash = Math.max(0f, this.warpFlash - dt * 2f);
     for (GameEvent e : events) {
       switch (e) {
       case GameEvent.WaveStarted w -> say("WAVE " + w.wave(), 2.5f);
-      case GameEvent.BossAppeared b -> say("ENEMY SHIP!", 2.5f);
-      case GameEvent.BossDestroyed b -> say("ENEMY SHIP DESTROYED  +" + this.world.tuning().scoreEnemyDestroyed,
-          2.5f);
+      case GameEvent.BossAppeared b -> say(b.kind() == Boss.Kind.SCOUT ? "SCOUT!" : "ENEMY SHIP!", 2.5f);
+      case GameEvent.BossDestroyed b -> say((b.kind() == Boss.Kind.SCOUT ? "SCOUT" : "ENEMY SHIP") + " DESTROYED  +"
+          + b.points(), 2.5f);
       case GameEvent.BossLeft b -> say("The enemy ship left", 2f);
+      case GameEvent.ExtraLife l -> say("EXTRA SHIP!", 2.5f);
+      case GameEvent.Hyperspace h -> this.warpFlash = 1f;
       case GameEvent.ShipDestroyed s -> {
         this.flash = 0.8f;
         if (this.world.lives() > 0) {
           say("SHIP LOST", this.world.tuning().respawnDelay);
         }
       }
-      case GameEvent.GameOver g -> {
-        final boolean best = !this.custom && this.game.recordScore(g.score());
-        engine.states().push(new GameOverState(this.game, this, g.score(), best, this.custom));
-      }
+      case GameEvent.GameOver g -> engine.states().push(new GameOverState(this.game, this, g.score(),
+          this.world.wave(), this.difficulty, this.custom));
       default -> {
       }
       }
@@ -189,6 +198,9 @@ final class PlayState extends LevelState {
     if (this.flash > 0f) {
       ui.drawRect(0f, 0f, width, height, 0.8f, 0.1f, 0.05f, this.flash * 0.45f);
     }
+    if (this.warpFlash > 0f) {
+      ui.drawRect(0f, 0f, width, height, 0.75f, 0.85f, 1f, this.warpFlash * this.warpFlash * 0.8f);
+    }
     if (this.world.isGameOver()) {
       return; // the game-over screen takes over
     }
@@ -197,9 +209,11 @@ final class PlayState extends LevelState {
       Hud.crosshair(ui, width, height);
     }
     Hud.text(ui, String.format(Locale.ROOT, "SCORE  %d", this.world.score()), 16f, 14f, 1.6f, 1f, 1f, 1f, 1f);
-    Hud.text(ui, "WAVE " + this.world.wave() + "    ROCKS " + this.world.asteroids().size(), 16f,
-        14f + ui.lineHeight(1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
-    final var lives = "SHIPS " + "▲ ".repeat(Math.max(0, this.world.lives())).trim();
+    Hud.text(ui, "WAVE " + this.world.wave() + "    ROCKS " + this.world.asteroids().size() + "    "
+        + this.difficulty.label.toUpperCase(Locale.ROOT), 16f, 14f + ui.lineHeight(1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f,
+        1f);
+    final int ships = Math.max(0, this.world.lives());
+    final var lives = "SHIPS " + (ships > 6 ? "▲ x" + ships : "▲ ".repeat(ships).trim());
     Hud.text(ui, lives, width - ui.textWidth(lives, 1.6f) - 16f, 14f, 1.6f, 0.6f, 1f, 0.8f, 1f);
     if (ship.alive && ship.invulnerable > 0f && ((int) (this.time * 6) % 2 == 0)) {
       Hud.centered(ui, "SHIELD", width, height / 2f + 24f, 1.1f, 0.6f, 1f, 0.8f, 0.9f);
@@ -208,7 +222,16 @@ final class PlayState extends LevelState {
       Hud.text(ui, "CUSTOM TUNING", 16f, 14f + ui.lineHeight(1.6f) + ui.lineHeight(1.1f) + 6f, 1f, 1f, 0.75f, 0.3f, 1f);
     }
     final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
-    Hud.text(ui, speed, 16f, height - ui.lineHeight(1.1f) - 14f, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
+    final float bottom = height - ui.lineHeight(1.1f) - 14f;
+    Hud.text(ui, speed, 16f, bottom, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
+    final float cooldown = ship.hyperspaceCooldown;
+    final var jump = cooldown > 0f ? String.format(Locale.ROOT, "JUMP %.0f", Math.ceil(cooldown)) : "JUMP READY  (E)";
+    final float jumpX = 16f + ui.textWidth("SPEED 00", 1.1f) + 30f;
+    if (cooldown > 0f) {
+      Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.62f, 0.7f, 1f);
+    } else {
+      Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.85f, 1f, 1f);
+    }
 
     final var view = this.camera.transform().rotation();
     final float fov = this.camera.get(Camera.class).fovDegrees;
@@ -224,8 +247,13 @@ final class PlayState extends LevelState {
     final var boss = this.world.boss();
     if (boss != null) {
       final var toBoss = this.world.delta(ship.position, boss.position, new Vector3f());
-      Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()),
-          1f, 0.3f, 0.25f);
+      if (boss.kind == Boss.Kind.SCOUT) {
+        Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "SCOUT %.0f m", toBoss.length()),
+            1f, 0.7f, 0.15f);
+      } else {
+        Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()),
+            1f, 0.3f, 0.25f);
+      }
     }
     if (this.game.options().radar) {
       Radar.draw(ui, width, height, this.world, ship.position, view);

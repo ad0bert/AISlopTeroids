@@ -1,11 +1,13 @@
 package astroids;
 
+import java.util.List;
+
 import org.joml.Quaternionf;
 import org.joml.Vector3f;
 
 import engine.render.UiCanvas;
 
-/** Drawing helpers for the 2D overlay: shadowed text, the crosshair, and the pointer to the boss. */
+/** Drawing helpers for the 2D overlay: shadowed text, the crosshair, markers, and score tables. */
 final class Hud {
   private Hud() {
   }
@@ -27,6 +29,33 @@ final class Hud {
     ui.drawRect(cx + 3f, cy - 1f, 7f, 2f, 0.6f, 1f, 0.8f, 0.85f);
     ui.drawRect(cx - 1f, cy - 10f, 2f, 7f, 0.6f, 1f, 0.8f, 0.85f);
     ui.drawRect(cx - 1f, cy + 3f, 2f, 7f, 0.6f, 1f, 0.8f, 0.85f);
+  }
+
+  /** Width of a score table column at scale 1: rank, name, score, wave. */
+  static final float TABLE_WIDTH = 330f;
+
+  /**
+   * Rows {@code from} to {@code to} (exclusive) of a score table, one under the other, starting at the top left
+   * {@code x, y}; the row {@code highlight} (or none, -1) stands out. Returns the y below the last row.
+   */
+  static float scoreRows(UiCanvas ui, List<HighScores.Entry> entries, int from, int to, int highlight, float x,
+      float y, float scale) {
+    for (int i = from; i < to && i < entries.size(); i++) {
+      final var e = entries.get(i);
+      final boolean mine = i == highlight;
+      final float r = mine ? 1f : 0.85f;
+      final float g = mine ? 0.85f : 0.86f;
+      final float b = mine ? 0.4f : 0.9f;
+      final var rank = (i + 1) + ".";
+      text(ui, rank, x + 34f * scale - ui.textWidth(rank, scale), y, scale, r, g, b, 1f);
+      text(ui, e.name(), x + 44f * scale, y, scale, r, g, b, 1f);
+      final var score = Integer.toString(e.score());
+      text(ui, score, x + 260f * scale - ui.textWidth(score, scale), y, scale, r, g, b, 1f);
+      final var wave = e.wave() > 0 ? "w" + e.wave() : "";
+      text(ui, wave, x + 272f * scale, y, scale * 0.85f, r * 0.8f, g * 0.8f, b * 0.8f, 1f);
+      y += ui.lineHeight(scale) + 3f;
+    }
+    return y;
   }
 
   static void dim(UiCanvas ui, int width, int height, float alpha) {

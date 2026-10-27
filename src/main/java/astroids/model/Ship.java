@@ -12,6 +12,8 @@ public final class Ship {
   /** Seconds until the ship comes back after it was destroyed. */
   public float respawnIn;
   public float fireCooldown;
+  /** Seconds until the next hyperspace jump is possible. */
+  public float hyperspaceCooldown;
 
   public boolean canBeHit() {
     return this.alive && this.invulnerable <= 0f;

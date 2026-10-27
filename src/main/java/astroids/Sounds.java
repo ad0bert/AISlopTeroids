@@ -86,6 +86,41 @@ final class Sounds {
     return AudioData.mono(RATE, out);
   }
 
+  /** A quick rising arpeggio, twice: an extra ship. */
+  static AudioData extraLife() {
+    final int n = (int) (RATE * 0.75f);
+    final float[] out = new float[n];
+    final float[] notes = { 659.25f, 783.99f, 987.77f, 1318.51f };
+    double phase = 0;
+    for (int i = 0; i < n; i++) {
+      final float t = (float) i / RATE;
+      final int step = (int) (t / 0.0625f);
+      final float freq = notes[step % notes.length] * (step >= notes.length ? 1f : 0.5f);
+      phase += 2 * Math.PI * freq / RATE;
+      final float within = t - step * 0.0625f;
+      out[i] = 0.18f * (float) (Math.sin(phase) + 0.25 * Math.sin(2 * phase)) * (float) Math.exp(-within * 18)
+          * attack(i, 20);
+    }
+    return AudioData.mono(RATE, out);
+  }
+
+  /** A sweep up through rushing noise and down again: the hyperspace jump. */
+  static AudioData warp() {
+    final int n = (int) (RATE * 0.7f);
+    final float[] out = new float[n];
+    final var rnd = new Random(4L);
+    float lp = 0f;
+    double phase = 0;
+    for (int i = 0; i < n; i++) {
+      final float u = (float) i / n;
+      final float rise = (float) Math.sin(Math.PI * u); // up, then down
+      phase += 2 * Math.PI * (180 + 1400 * rise * rise) / RATE;
+      lp += (0.05f + 0.4f * rise) * ((rnd.nextFloat() * 2f - 1f) - lp);
+      out[i] = (0.22f * (float) Math.sin(phase) + 0.35f * lp) * rise * attack(i, 30);
+    }
+    return AudioData.mono(RATE, out);
+  }
+
   private static AudioData zap(float seconds, float from, float to, float volume) {
     final int n = (int) (RATE * seconds);
     final float[] out = new float[n];

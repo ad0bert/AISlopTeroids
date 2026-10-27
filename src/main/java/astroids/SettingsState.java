@@ -72,6 +72,7 @@ final class SettingsState implements GameState {
       final var defaults = new Options();
       defaults.fullscreen = o.fullscreen; // the window stays as it is
       defaults.vsync = o.vsync;
+      defaults.difficulty = o.difficulty; // picked on the title screen, not here
       this.game.replaceOptions(defaults);
     }
     if (g.button("Done")) {

@@ -35,6 +35,8 @@ final class Art {
   final Material bossShotMaterial = glowing(2.2f, 0.25f, 0.7f);
   final Material bossHull = new Material().color(0.55f, 0.57f, 0.62f, 1f);
   final Material bossDome = glowing(1.6f, 0.2f, 0.1f);
+  final Material scoutHull = new Material().color(0.3f, 0.32f, 0.36f, 1f);
+  final Material scoutDome = glowing(2f, 1.2f, 0.1f);
   final Material fire = glowing(2.4f, 1.1f, 0.2f);
   final Material starMaterial = new Material().color(0.75f, 0.78f, 0.85f, 1f).unlit();
   final Material brightStarMaterial = new Material().color(1f, 1f, 1f, 1f).unlit();
@@ -47,6 +49,8 @@ final class Art {
   final AudioClip clang;
   final AudioClip alarm;
   final AudioClip chime;
+  final AudioClip extraLife;
+  final AudioClip warp;
 
   Art(Engine engine) {
     final var res = engine.resources();
@@ -59,6 +63,8 @@ final class Art {
     this.smallRockMaterial.specular = 0.05f;
     this.bossHull.specular = 0.8f;
     this.bossHull.shininess = 64f;
+    this.scoutHull.specular = 0.9f;
+    this.scoutHull.shininess = 96f;
     this.starMaterial.pointSize = 1.5f;
     this.brightStarMaterial.pointSize = 2.5f;
 
@@ -70,6 +76,8 @@ final class Art {
     this.clang = res.sound("gen:clang", Sounds.clang());
     this.alarm = res.sound("gen:alarm", Sounds.alarm());
     this.chime = res.sound("gen:chime", Sounds.chime());
+    this.extraLife = res.sound("gen:extra-life", Sounds.extraLife());
+    this.warp = res.sound("gen:warp", Sounds.warp());
 
     final var settings = engine.backend().settings();
     settings.sky = null;

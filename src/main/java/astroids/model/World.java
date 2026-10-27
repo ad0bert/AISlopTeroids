@@ -9,13 +9,18 @@ import org.joml.Vector3f;
 
 /**
  * The game's rules, without any rendering: a cube of space that wraps around on all sides (fly out on one side, come
- * back on the other), asteroids drifting through it, the player's ship, bullets, and now and then the boss ship.
+ * back on the other), asteroids drifting through it, the player's ship, bullets, and now and then an enemy ship (the
+ * "boss").
  *
  * <ul>
  * <li>A big asteroid that is hit splits into two small ones; a small one is destroyed.</li>
- * <li>The boss shoots at the player, takes a few hits, and leaves after a while.</li>
- * <li>Touching an asteroid or the boss, or being hit by a boss bullet, costs a life; the ship comes back in the middle
- * after a moment. Every ship, the first one too, is shielded for a few seconds.</li>
+ * <li>The enemy ship shoots at the player, takes a few hits, and leaves after a while. It comes a little more often with
+ * every wave; from a later wave on, it may be a scout instead: small, quick, one hit, and it may swerve out of a shot's
+ * way.</li>
+ * <li>Touching an asteroid or the enemy, or being hit by its bullet, costs a life; the ship comes back in the middle
+ * after a moment. Every ship, the first one too, is shielded for a few seconds. Every so many points bring an extra
+ * ship.</li>
+ * <li>Hyperspace jumps the ship to a random place in the arena, as a last resort: it might be a worse one.</li>
  * <li>When no asteroids are left, the next wave starts with one more big asteroid.</li>
  * </ul>
  *
@@ -28,6 +33,9 @@ public final class World {
   public static final float SHIP_RADIUS = 1f;
   public static final float BULLET_RADIUS = 0.3f;
   public static final float BOSS_RADIUS = 2f;
+  public static final float SCOUT_RADIUS = 1.2f;
+  /** A scout notices player shots this close (and heading its way). */
+  static final float DODGE_RANGE = 18f;
 
   private final Tuning t;
   private final Random random;
@@ -51,7 +59,7 @@ public final class World {
     this.random = new Random(seed);
     this.ship = withShip ? new Ship() : null;
     this.lives = tuning.lives;
-    this.bossDelay = withShip ? between(tuning.enemyMinDelay, tuning.enemyMaxDelay) : Float.POSITIVE_INFINITY;
+    this.bossDelay = withShip ? enemyWait() : Float.POSITIVE_INFINITY;
   }
 
   /** A new game as released: the ship in the middle, the first wave around it. */
@@ -157,6 +165,7 @@ public final class World {
 
   private void stepShip(float dt, Controls c) {
     final var s = this.ship;
+    s.hyperspaceCooldown = Math.max(0f, s.hyperspaceCooldown - dt);
     if (!s.alive) {
       s.respawnIn -= dt;
       if (s.respawnIn <= 0f) {
@@ -169,6 +178,14 @@ public final class World {
       return;
     }
     s.invulnerable = Math.max(0f, s.invulnerable - dt);
+    if (c.hyperspace() && s.hyperspaceCooldown <= 0f) {
+      // anywhere at all: away from trouble, or into worse
+      final var from = new Vector3f(s.position);
+      s.position.set(between(-arena(), arena()), between(-arena(), arena()), between(-arena(), arena()));
+      s.velocity.zero();
+      s.hyperspaceCooldown = this.t.hyperspaceCooldown;
+      this.events.add(new GameEvent.Hyperspace(from, new Vector3f(s.position)));
+    }
     final float thrust = Math.min(1f, c.thrust().length());
     if (thrust > 0f) {
       s.velocity.fma(this.t.shipAcceleration * dt * thrust / c.thrust().length(), c.thrust());
@@ -205,36 +222,72 @@ public final class World {
       return;
     }
     final var b = this.boss;
+    final boolean scout = b.kind == Boss.Kind.SCOUT;
     b.timeLeft -= dt;
     if (b.timeLeft <= 0f) {
       this.boss = null;
-      this.bossDelay = between(this.t.enemyMinDelay, this.t.enemyMaxDelay);
+      this.bossDelay = enemyWait();
       this.events.add(new GameEvent.BossLeft());
       return;
     }
+    final float speed = scout ? this.t.scoutSpeed : this.t.enemySpeed;
     b.turnTimer -= dt;
     if (b.turnTimer <= 0f) {
-      b.turnTimer = between(1.5f, 3f);
-      randomDirection(b.velocity).mul(this.t.enemySpeed);
+      b.turnTimer = scout ? between(0.4f, 0.9f) : between(1.5f, 3f); // the scout jinks
+      randomDirection(b.velocity).mul(speed);
+    }
+    if (scout) {
+      dodge(b, speed);
     }
     b.position.fma(dt, b.velocity);
     wrap(b.position);
     b.fireTimer -= dt;
     if (b.fireTimer <= 0f && this.ship != null && this.ship.alive && !this.gameOver) {
-      b.fireTimer = this.t.enemyFireInterval;
+      b.fireTimer = scout ? this.t.scoutFireInterval : this.t.enemyFireInterval;
       final var aim = delta(b.position, this.ship.position, this.tmp).normalize();
       // a little off, so that moving keeps the player safe
       final var off = randomDirection(this.tmp2).cross(aim);
       if (off.lengthSquared() > 1e-6f) {
-        final float spread = (float) Math.tan(Math.toRadians(this.t.enemyAimErrorDegrees));
+        final float error = scout ? this.t.scoutAimErrorDegrees : this.t.enemyAimErrorDegrees;
+        final float spread = (float) Math.tan(Math.toRadians(error));
         aim.fma(spread * this.random.nextFloat(), off.normalize()).normalize();
       }
       final var shot = new Bullet(true);
-      shot.position.set(b.position).fma(BOSS_RADIUS + 0.5f, aim);
+      shot.position.set(b.position).fma(b.radius() + 0.5f, aim);
       shot.velocity.set(aim).mul(this.t.enemyBulletSpeed);
       shot.timeLeft = this.t.enemyBulletTime;
       this.bullets.add(shot);
       this.events.add(new GameEvent.BossShot(new Vector3f(shot.position)));
+    }
+  }
+
+  /**
+   * The scout gets one look at each player shot that comes near and heads its way: with {@code scout.dodgeChance} it
+   * swerves across the shot's path.
+   */
+  private void dodge(Boss b, float speed) {
+    final var toScout = this.tmp;
+    for (Bullet shot : this.bullets) {
+      if (shot.fromBoss || shot.dodgeRolled) {
+        continue;
+      }
+      delta(shot.position, b.position, toScout);
+      final float along = toScout.dot(shot.velocity);
+      if (along <= 0f || toScout.lengthSquared() > DODGE_RANGE * DODGE_RANGE) {
+        continue; // flying away from it, or still far
+      }
+      shot.dodgeRolled = true;
+      if (this.random.nextFloat() >= this.t.scoutDodgeChance) {
+        continue;
+      }
+      // the part of the way to the scout that is across the shot's path: move further that way
+      toScout.fma(-along / shot.velocity.lengthSquared(), shot.velocity);
+      if (toScout.lengthSquared() < 1e-6f) {
+        randomDirection(toScout).cross(shot.velocity); // dead on: any way across
+      }
+      b.velocity.set(toScout).normalize(speed);
+      b.turnTimer = 0.8f;
+      return;
     }
   }
 
@@ -254,7 +307,7 @@ public final class World {
         if (hit != null) {
           breakAsteroid(hit, true);
           used = true;
-        } else if (this.boss != null && touches(b.position, BULLET_RADIUS, this.boss.position, BOSS_RADIUS)) {
+        } else if (this.boss != null && touches(b.position, BULLET_RADIUS, this.boss.position, this.boss.radius())) {
           hitBoss();
           used = true;
         }
@@ -269,11 +322,9 @@ public final class World {
       if (rock != null) {
         breakAsteroid(rock, true);
         destroyShip();
-      } else if (this.boss != null && touches(this.ship.position, SHIP_RADIUS, this.boss.position, BOSS_RADIUS)) {
-        this.score += this.t.scoreEnemyDestroyed;
-        this.events.add(new GameEvent.BossDestroyed(new Vector3f(this.boss.position)));
-        this.boss = null;
-        this.bossDelay = between(this.t.enemyMinDelay, this.t.enemyMaxDelay);
+      } else if (this.boss != null
+          && touches(this.ship.position, SHIP_RADIUS, this.boss.position, this.boss.radius())) {
+        bossDestroyed();
         destroyShip();
       }
     }
@@ -323,7 +374,7 @@ public final class World {
   private void breakAsteroid(Asteroid a, boolean scored) {
     this.asteroids.remove(a);
     if (scored) {
-      this.score += a.size == Asteroid.Size.BIG ? this.t.scoreBigRock : this.t.scoreSmallRock;
+      addScore(a.size == Asteroid.Size.BIG ? this.t.scoreBigRock : this.t.scoreSmallRock);
     }
     this.events.add(new GameEvent.AsteroidDestroyed(new Vector3f(a.position), a.size));
     if (a.size == Asteroid.Size.BIG) {
@@ -345,29 +396,61 @@ public final class World {
     final var b = this.boss;
     b.health--;
     if (b.health > 0) {
-      this.score += this.t.scoreEnemyHit;
+      addScore(this.t.scoreEnemyHit);
       this.events.add(new GameEvent.BossHit(new Vector3f(b.position)));
       return;
     }
-    this.score += this.t.scoreEnemyDestroyed;
-    this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position)));
+    bossDestroyed();
+  }
+
+  private void bossDestroyed() {
+    final var b = this.boss;
+    final int points = b.kind == Boss.Kind.SCOUT ? this.t.scoreScoutDestroyed : this.t.scoreEnemyDestroyed;
+    addScore(points);
+    this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position), b.kind, points));
     this.boss = null;
-    this.bossDelay = between(this.t.enemyMinDelay, this.t.enemyMaxDelay);
+    this.bossDelay = enemyWait();
+  }
+
+  /** How long until the next enemy ship: shorter with every wave, down to 40% of the first wave's. */
+  private float enemyWait() {
+    final float factor = Math.max(0.4f, 1f - this.t.enemyWaitCutPerWave * Math.max(0, this.wave - 1));
+    return between(this.t.enemyMinDelay, this.t.enemyMaxDelay) * factor;
+  }
+
+  /** Adds points; every {@code ship.extraLifeEvery} of them bring an extra ship. */
+  private void addScore(int points) {
+    final int before = this.score;
+    this.score += points;
+    final int every = this.t.extraLifeEvery;
+    if (every > 0 && this.ship != null && !this.gameOver) {
+      final int extra = this.score / every - before / every;
+      if (extra > 0) {
+        this.lives += extra;
+        this.events.add(new GameEvent.ExtraLife(this.lives));
+      }
+    }
   }
 
   private void spawnBoss() {
-    final var b = new Boss();
+    final boolean scout = this.wave >= this.t.scoutFromWave && this.random.nextFloat() < this.t.scoutChance;
+    spawnBoss(scout ? Boss.Kind.SCOUT : Boss.Kind.BIG);
+  }
+
+  private void spawnBoss(Boss.Kind kind) {
+    final var b = new Boss(kind);
     // on a face of the arena, as far as possible from the ship
     do {
       b.position.set(between(-arena(), arena()), between(-arena(), arena()), between(-arena(), arena()));
       final int axis = this.random.nextInt(3);
       b.position.setComponent(axis, this.random.nextBoolean() ? arena() : -arena());
     } while (this.ship != null && distance(b.position, this.ship.position) < this.t.safeDistance);
-    b.health = this.t.enemyHealth;
-    b.timeLeft = this.t.enemyStay;
-    b.fireTimer = this.t.enemyFireInterval;
+    final boolean scout = kind == Boss.Kind.SCOUT;
+    b.health = scout ? this.t.scoutHealth : this.t.enemyHealth;
+    b.timeLeft = scout ? this.t.scoutStay : this.t.enemyStay;
+    b.fireTimer = scout ? this.t.scoutFireInterval : this.t.enemyFireInterval;
     this.boss = b;
-    this.events.add(new GameEvent.BossAppeared(new Vector3f(b.position)));
+    this.events.add(new GameEvent.BossAppeared(new Vector3f(b.position), kind));
   }
 
   private void destroyShip() {
@@ -469,9 +552,19 @@ public final class World {
     this.asteroids.clear();
   }
 
-  /** Brings the boss in now, for tests. */
+  /** Brings the big enemy ship in now, for tests. */
   public Boss summonBoss() {
-    spawnBoss();
+    return summon(Boss.Kind.BIG);
+  }
+
+  /** Brings an enemy ship of this kind in now, for tests. */
+  public Boss summon(Boss.Kind kind) {
+    spawnBoss(kind);
     return this.boss;
+  }
+
+  /** How long until the next enemy ship comes, for tests. */
+  public float enemyDelay() {
+    return this.bossDelay;
   }
 }

@@ -18,8 +18,9 @@ import java.util.function.BiConsumer;
 import java.util.function.Function;
 
 /**
- * The numbers that decide how the game plays: speeds, timings, sizes of waves, the enemy ship, scores. The defaults are
- * the game as released; a {@code tuning.properties} file can override any of them for playtesting, e.g.
+ * The numbers that decide how the game plays: speeds, timings, sizes of waves, the enemy ships, scores. The defaults are
+ * the game as released (Normal); each {@link Difficulty} changes some of them, and a {@code tuning.properties} file can
+ * override any of them on top of that for playtesting, e.g.
  *
  * <pre>
  * ship.maxSpeed = 35
@@ -39,6 +40,8 @@ public final class Tuning {
   public int lives = 3;
   public float respawnDelay = 2f;
   public float shieldTime = 3f;
+  public int extraLifeEvery = 10000;
+  public float hyperspaceCooldown = 8f;
   // the player's gun
   public float bulletSpeed = 70f;
   public float bulletTime = 1.1f;
@@ -63,27 +66,44 @@ public final class Tuning {
   public float enemyAimErrorDegrees = 1.44f;
   public float enemyMinDelay = 20f;
   public float enemyMaxDelay = 35f;
+  public float enemyWaitCutPerWave = 0.06f;
+  // the scout: a small, quick enemy ship from a later wave on
+  public int scoutFromWave = 5;
+  public float scoutChance = 0.5f;
+  public int scoutHealth = 1;
+  public float scoutSpeed = 32f;
+  public float scoutStay = 15f;
+  public float scoutFireInterval = 0.9f;
+  public float scoutAimErrorDegrees = 4f;
+  public float scoutDodgeChance = 0.5f;
   // scores
   public int scoreBigRock = 20;
   public int scoreSmallRock = 50;
   public int scoreEnemyHit = 100;
   public int scoreEnemyDestroyed = 1000;
+  public int scoreScoutDestroyed = 1500;
 
-  /** One tunable value: its key in the file, a description, the smallest value that makes sense, and how to set it. */
-  private record Param(String key, String description, float min, boolean integer, Function<Tuning, Number> get,
-      BiConsumer<Tuning, Number> set) {
+  /** One tunable value: its key in the file, a description, the range that makes sense, and how to set it. */
+  private record Param(String key, String description, float min, float max, boolean integer,
+      Function<Tuning, Number> get, BiConsumer<Tuning, Number> set) {
   }
 
   private static final Map<String, Param> PARAMS = new LinkedHashMap<>();
 
   private static void f(String key, String description, float min, Function<Tuning, Number> get,
       BiConsumer<Tuning, Number> set) {
-    PARAMS.put(key, new Param(key, description, min, false, get, set));
+    PARAMS.put(key, new Param(key, description, min, Float.MAX_VALUE, false, get, set));
+  }
+
+  /** A fraction or chance: at most {@code max}. */
+  private static void f(String key, String description, float min, float max, Function<Tuning, Number> get,
+      BiConsumer<Tuning, Number> set) {
+    PARAMS.put(key, new Param(key, description, min, max, false, get, set));
   }
 
   private static void i(String key, String description, int min, Function<Tuning, Number> get,
       BiConsumer<Tuning, Number> set) {
-    PARAMS.put(key, new Param(key, description, min, true, get, set));
+    PARAMS.put(key, new Param(key, description, min, Float.MAX_VALUE, true, get, set));
   }
 
   static {
@@ -100,6 +120,10 @@ public final class Tuning {
         (t, v) -> t.respawnDelay = v.floatValue());
     f("ship.shieldTime", "seconds a new ship cannot be hit", 0f, t -> t.shieldTime,
         (t, v) -> t.shieldTime = v.floatValue());
+    i("ship.extraLifeEvery", "points for each extra ship (0 = none)", 0, t -> t.extraLifeEvery,
+        (t, v) -> t.extraLifeEvery = v.intValue());
+    f("hyperspace.cooldown", "seconds between hyperspace jumps", 0.5f, t -> t.hyperspaceCooldown,
+        (t, v) -> t.hyperspaceCooldown = v.floatValue());
     f("gun.bulletSpeed", "metres per second (on top of the ship's speed)", 1f, t -> t.bulletSpeed,
         (t, v) -> t.bulletSpeed = v.floatValue());
     f("gun.bulletTime", "seconds a shot flies", 0.1f, t -> t.bulletTime, (t, v) -> t.bulletTime = v.floatValue());
@@ -137,6 +161,21 @@ public final class Tuning {
         (t, v) -> t.enemyMinDelay = v.floatValue());
     f("enemy.maxDelay", "longest wait before an enemy ship comes, seconds", 1f, t -> t.enemyMaxDelay,
         (t, v) -> t.enemyMaxDelay = v.floatValue());
+    f("enemy.waitCutPerWave", "the wait gets this much shorter with every wave (0.06 = 6%), down to 40% of it", 0f,
+        0.6f, t -> t.enemyWaitCutPerWave, (t, v) -> t.enemyWaitCutPerWave = v.floatValue());
+    i("scout.fromWave", "first wave a scout can come in", 1, t -> t.scoutFromWave,
+        (t, v) -> t.scoutFromWave = v.intValue());
+    f("scout.chance", "from then on, the chance that an enemy ship is a scout (0 to 1)", 0f, 1f, t -> t.scoutChance,
+        (t, v) -> t.scoutChance = v.floatValue());
+    i("scout.health", "hits a scout takes", 1, t -> t.scoutHealth, (t, v) -> t.scoutHealth = v.intValue());
+    f("scout.speed", "metres per second", 0f, t -> t.scoutSpeed, (t, v) -> t.scoutSpeed = v.floatValue());
+    f("scout.stay", "seconds before it leaves", 1f, t -> t.scoutStay, (t, v) -> t.scoutStay = v.floatValue());
+    f("scout.fireInterval", "seconds between its shots", 0.1f, t -> t.scoutFireInterval,
+        (t, v) -> t.scoutFireInterval = v.floatValue());
+    f("scout.aimErrorDegrees", "how far off its aim may be", 0f, t -> t.scoutAimErrorDegrees,
+        (t, v) -> t.scoutAimErrorDegrees = v.floatValue());
+    f("scout.dodgeChance", "the chance that it sees a shot coming and swerves (0 to 1)", 0f, 1f,
+        t -> t.scoutDodgeChance, (t, v) -> t.scoutDodgeChance = v.floatValue());
     i("score.bigRock", "points for a big rock", 0, t -> t.scoreBigRock, (t, v) -> t.scoreBigRock = v.intValue());
     i("score.smallRock", "points for a small rock", 0, t -> t.scoreSmallRock,
         (t, v) -> t.scoreSmallRock = v.intValue());
@@ -144,10 +183,25 @@ public final class Tuning {
         (t, v) -> t.scoreEnemyHit = v.intValue());
     i("score.enemyDestroyed", "points for destroying it", 0, t -> t.scoreEnemyDestroyed,
         (t, v) -> t.scoreEnemyDestroyed = v.intValue());
+    i("score.scoutDestroyed", "points for destroying a scout", 0, t -> t.scoreScoutDestroyed,
+        (t, v) -> t.scoreScoutDestroyed = v.intValue());
   }
 
-  /** The game as released. */
+  /** The game as released (Normal). */
   public Tuning() {
+  }
+
+  /** The values of a difficulty level: the defaults with its changes. */
+  public static Tuning of(Difficulty difficulty) {
+    final var t = new Tuning();
+    difficulty.changes.forEach((key, value) -> {
+      final var param = PARAMS.get(key);
+      if (param == null) {
+        throw new IllegalStateException(difficulty + " changes unknown key " + key);
+      }
+      param.set().accept(t, param.integer() ? (Number) value.intValue() : (Number) value.floatValue());
+    });
+    return t;
   }
 
   /** A tuning read from properties: how many values differ from the defaults, and what could not be used. */
@@ -160,8 +214,16 @@ public final class Tuning {
 
   /** The defaults with the values in {@code p} on top; unknown keys and unusable values are reported, not applied. */
   public static Loaded from(Properties p) {
-    final var t = new Tuning();
-    final var defaults = new Tuning();
+    return from(p, Difficulty.NORMAL);
+  }
+
+  /**
+   * A difficulty's values with those in {@code p} on top. Only values that differ from the difficulty's count as
+   * changed; unknown keys and unusable values are reported, not applied.
+   */
+  public static Loaded from(Properties p, Difficulty difficulty) {
+    final var t = of(difficulty);
+    final var defaults = of(difficulty);
     final List<String> problems = new ArrayList<>();
     int overrides = 0;
     for (String key : p.stringPropertyNames()) {
@@ -175,6 +237,8 @@ public final class Tuning {
         final double value = Double.parseDouble(text);
         if (Double.isNaN(value) || value < param.min()) {
           problems.add(key + " = " + text + ": must be at least " + format(param.min()));
+        } else if (value > param.max()) {
+          problems.add(key + " = " + text + ": must be at most " + format(param.max()));
         } else if (param.integer() && value != Math.rint(value)) {
           problems.add(key + " = " + text + ": must be a whole number");
         } else {
@@ -189,7 +253,7 @@ public final class Tuning {
       }
     }
     // pairs and limits that only make sense together
-    final var d = new Tuning();
+    final var d = defaults;
     if (t.rockMinSpeed > t.rockMaxSpeed) {
       problems.add("rocks.minSpeed is above rocks.maxSpeed; using the defaults for both");
       t.rockMinSpeed = d.rockMinSpeed;
@@ -219,13 +283,18 @@ public final class Tuning {
 
   /** Reads a tuning file; a missing file gives the defaults. */
   public static Loaded load(Path file) throws IOException {
+    return load(file, Difficulty.NORMAL);
+  }
+
+  /** Reads a tuning file on top of a difficulty's values; a missing file gives the difficulty's values. */
+  public static Loaded load(Path file, Difficulty difficulty) throws IOException {
     final var p = new Properties();
     try (InputStream in = Files.newInputStream(file)) {
       p.load(in);
     } catch (NoSuchFileException e) {
-      return new Loaded(new Tuning(), 0, List.of());
+      return new Loaded(of(difficulty), 0, List.of());
     }
-    return from(p);
+    return from(p, difficulty);
   }
 
   /** Writes every key, commented out, with its default and what it does: a starting point for a tuning file. */
@@ -235,6 +304,8 @@ public final class Tuning {
       w.write("# SimpleAstroids tuning: copy this file to tuning.properties next to it, remove the # in front of a\n");
       w.write("# line and change the value. It is read again for every new game. Games with changed values do not\n");
       w.write("# set a best score. This file is rewritten at every start; edit tuning.properties, not this one.\n");
+      w.write("# The values below are Normal's; the other difficulties start from the values in brackets. A value set\n");
+      w.write("# in tuning.properties counts for every difficulty.\n");
       String group = "";
       for (Param p : PARAMS.values()) {
         final var prefix = p.key().substring(0, p.key().indexOf('.'));
@@ -242,7 +313,14 @@ public final class Tuning {
           group = prefix;
           w.write("\n");
         }
-        w.write("# " + p.description() + "\n");
+        final var others = new StringBuilder();
+        for (Difficulty level : Difficulty.values()) {
+          final var v = level.changes.get(p.key());
+          if (v != null) {
+            others.append(others.isEmpty() ? " (" : ", ").append(level.label).append(": ").append(format(v));
+          }
+        }
+        w.write("# " + p.description() + (others.isEmpty() ? "" : others + ")") + "\n");
         w.write("#" + p.key() + " = " + format(p.get().apply(d)) + "\n");
       }
     }

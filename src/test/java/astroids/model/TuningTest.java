@@ -101,6 +101,78 @@ class TuningTest {
   }
 
   @Test
+  void eachDifficultyChangesOnlyKnownKeysToUsableValues() {
+    for (Difficulty d : Difficulty.values()) {
+      final var p = new Properties();
+      d.changes.forEach((k, v) -> p.setProperty(k, v.toString()));
+      final var loaded = Tuning.from(p);
+      assertTrue(loaded.problems().isEmpty(), d + ": " + loaded.problems());
+      assertEquals(d.changes.size(), loaded.overrides(), d + " only lists values that differ from Normal");
+    }
+    assertTrue(Difficulty.NORMAL.changes.isEmpty(), "Normal is the game as released");
+    final var easy = Tuning.of(Difficulty.EASY);
+    final var hard = Tuning.of(Difficulty.HARD);
+    final var normal = new Tuning();
+    assertTrue(easy.firstWaveRocks < normal.firstWaveRocks && normal.firstWaveRocks < hard.firstWaveRocks);
+    assertTrue(easy.rockMaxSpeed < normal.rockMaxSpeed && normal.rockMaxSpeed < hard.rockMaxSpeed);
+    assertTrue(easy.enemyFireInterval > normal.enemyFireInterval
+        && normal.enemyFireInterval > hard.enemyFireInterval);
+    assertTrue(easy.scoutFromWave > normal.scoutFromWave && normal.scoutFromWave > hard.scoutFromWave);
+  }
+
+  @Test
+  void aTuningFileCountsAgainstTheChosenDifficulty() throws IOException {
+    final var p = new Properties();
+    p.setProperty("rocks.firstWave", "12");
+    final var onHard = Tuning.from(p, Difficulty.HARD);
+    assertFalse(onHard.custom(), "Hard already has 12");
+    final var onNormal = Tuning.from(p, Difficulty.NORMAL);
+    assertTrue(onNormal.custom());
+    assertEquals(12, onNormal.tuning().firstWaveRocks);
+    assertEquals(new Tuning().rockMaxSpeed, onNormal.tuning().rockMaxSpeed);
+
+    p.setProperty("rocks.minSpeed", "30");
+    final var clash = Tuning.from(p, Difficulty.EASY);
+    assertEquals(Tuning.of(Difficulty.EASY).rockMinSpeed, clash.tuning().rockMinSpeed,
+        "a min above its max falls back to the difficulty's values");
+
+    final var missing = Tuning.load(this.dir.resolve("none.properties"), Difficulty.EASY);
+    assertFalse(missing.custom());
+    assertEquals(6, missing.tuning().firstWaveRocks);
+  }
+
+  @Test
+  void chancesCannotBeAboveOne() throws IOException {
+    final var loaded = parse("""
+        scout.chance = 1.5
+        scout.dodgeChance = 1
+        """);
+    assertEquals(1, loaded.problems().size(), loaded.problems().toString());
+    assertTrue(loaded.problems().get(0).contains("at most 1"));
+    assertEquals(new Tuning().scoutChance, loaded.tuning().scoutChance);
+    assertEquals(1f, loaded.tuning().scoutDodgeChance);
+  }
+
+  @Test
+  void theExampleFileShowsWhatTheOtherDifficultiesUse() throws IOException {
+    final var file = this.dir.resolve("tuning.example.properties");
+    Tuning.writeExample(file);
+    final var text = Files.readString(file);
+    assertTrue(text.contains("(Easy: 6, Hard: 12)\n#rocks.firstWave = 10"), text);
+    assertTrue(text.contains("(Hard: 2)\n#ship.shieldTime = 3"), text);
+  }
+
+  @Test
+  void difficultiesStepAndParse() {
+    assertEquals(Difficulty.HARD, Difficulty.NORMAL.step(1));
+    assertEquals(Difficulty.HARD, Difficulty.HARD.step(1), "stays at the end");
+    assertEquals(Difficulty.EASY, Difficulty.EASY.step(-1));
+    assertEquals(Difficulty.EASY, Difficulty.parse("easy"));
+    assertEquals(Difficulty.NORMAL, Difficulty.parse("nonsense"));
+    assertEquals(Difficulty.NORMAL, Difficulty.parse(null));
+  }
+
+  @Test
   void aMissingFileGivesTheDefaults() throws IOException {
     final var loaded = Tuning.load(this.dir.resolve("nothing.properties"));
     assertFalse(loaded.custom());
