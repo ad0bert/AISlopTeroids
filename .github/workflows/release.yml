@@ -1,0 +1,117 @@
+name: release
+# Push a tag like v0.1.0 to release the game at that version: it is built and packaged with its own Java runtime on
+# Linux, macOS and Windows (jpackage app images), plus a runnable jar for any system with Java 25, and all of it is
+# attached to a GitHub release titled and described by release-notes/<tag>.md (see the README there).
+#
+# Every build finishes before the release is touched, so a failed build never leaves half a release. Safe to run again
+# for the same tag (Actions > release > Run workflow, with the tag): an existing release gets its title, notes and files
+# replaced.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing tag to release again, e.g. v0.1.0
+        required: true
+permissions:
+  contents: write
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux-x64
+          - os: macos-latest
+            platform: macos-arm64
+          - os: windows-latest
+            platform: windows-x64
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: 25
+          cache: maven
+      - name: Build and install the engine
+        run: |
+          engine=$(mvn -B -q help:evaluate -Dexpression=engine.version -DforceStdout)
+          echo "Engine $engine"
+          git clone -q --depth 1 --branch "v$engine" https://github.com/ad0bert/EngineNamedScratch.git \
+            "$RUNNER_TEMP/engine"
+          cd "$RUNNER_TEMP/engine"
+          mvn -B -q versions:set -DnewVersion="$engine" -DgenerateBackupPoms=false
+          mvn -B -q install -DskipTests -pl engine -am
+      - name: Build and package the game
+        run: |
+          version="${TAG#v}"
+          numeric="${version%%-*}"
+          # macOS bundles want a first number above zero
+          if [ "$RUNNER_OS" = macOS ] && [ "${numeric%%.*}" = 0 ]; then numeric="1.${numeric#*.}"; fi
+          mvn -B -q versions:set -DnewVersion="$version" -DgenerateBackupPoms=false
+          mvn -B package -Pjpackage -Djpackage.version="$numeric"
+      - name: Archive
+        run: |
+          version="${TAG#v}"
+          mkdir out
+          name="SimpleAstroids-$version-${{ matrix.platform }}"
+          if [ "$RUNNER_OS" = Windows ]; then
+            (cd target/jpackage && 7z a -bd "../../out/$name.zip" .)
+          else
+            tar -czf "out/$name.tar.gz" -C target/jpackage . # keeps the launcher executable
+          fi
+          if [ "$RUNNER_OS" = Linux ]; then # the runnable jar is the same everywhere: one copy is enough
+            (cd target/dist && zip -q -r "../../out/SimpleAstroids-$version-java.zip" .)
+          fi
+          ls -l out
+      - uses: actions/upload-artifact@v7
+        with:
+          name: build-${{ matrix.platform }}
+          path: out/*
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: refs/tags/${{ inputs.tag || github.ref_name }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: build-*
+          merge-multiple: true
+          path: out
+      - name: Create or update the GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          version="${TAG#v}"
+          ls -l out
+          # release-notes/<tag>.md: a "# title" line, then the description in Markdown
+          notes_file="release-notes/$TAG.md"
+          if [ -f "$notes_file" ]; then
+            title=$(head -n 1 "$notes_file" | sed -E 's/^#[[:space:]]*//')
+            tail -n +2 "$notes_file" | sed '/./,$!d' > release-notes.md # without the blank lines after the title
+          else
+            echo "::warning::No $notes_file; the release gets a plain title and description"
+            title="SimpleAstroids $version"
+            echo "SimpleAstroids $version" > release-notes.md
+          fi
+          if gh release view "$TAG" > /dev/null 2>&1; then
+            echo "::notice::Release $TAG exists; updating its title, notes and files"
+            gh release edit "$TAG" --title "${title:-$TAG}" --notes-file release-notes.md
+            gh release upload "$TAG" out/* --clobber
+          else
+            gh release create "$TAG" --verify-tag --title "${title:-$TAG}" --notes-file release-notes.md out/*
+          fi
