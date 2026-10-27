@@ -44,10 +44,10 @@ public final class Tuning {
   public float bulletTime = 1.1f;
   public float fireInterval = 0.16f;
   // asteroids and waves
-  public int firstWaveRocks = 4;
-  public int maxRocks = 12;
-  public float rockMinSpeed = 3f;
-  public float rockMaxSpeed = 6f;
+  public int firstWaveRocks = 10;
+  public int maxRocks = 120;
+  public float rockMinSpeed = 13f;
+  public float rockMaxSpeed = 16f;
   public float rockSpeedPerWave = 0.4f;
   public float splitMinSpeed = 4f;
   public float splitMaxSpeed = 7f;
@@ -55,12 +55,12 @@ public final class Tuning {
   public float waveDelay = 2.5f;
   // the enemy ship
   public int enemyHealth = 3;
-  public float enemySpeed = 9f;
+  public float enemySpeed = 20f;
   public float enemyStay = 25f;
-  public float enemyFireInterval = 1.4f;
+  public float enemyFireInterval = 0.5f;
   public float enemyBulletSpeed = 32f;
   public float enemyBulletTime = 3f;
-  public float enemyAimErrorDegrees = 3.44f; // 0.06 radians, as released
+  public float enemyAimErrorDegrees = 1.44f;
   public float enemyMinDelay = 20f;
   public float enemyMaxDelay = 35f;
   // scores
@@ -150,7 +150,7 @@ public final class Tuning {
   public Tuning() {
   }
 
-  /** A tuning read from properties, with what could not be used. */
+  /** A tuning read from properties: how many values differ from the defaults, and what could not be used. */
   public record Loaded(Tuning tuning, int overrides, List<String> problems) {
     /** Whether anything differs from the defaults. */
     public boolean custom() {
@@ -161,6 +161,7 @@ public final class Tuning {
   /** The defaults with the values in {@code p} on top; unknown keys and unusable values are reported, not applied. */
   public static Loaded from(Properties p) {
     final var t = new Tuning();
+    final var defaults = new Tuning();
     final List<String> problems = new ArrayList<>();
     int overrides = 0;
     for (String key : p.stringPropertyNames()) {
@@ -177,8 +178,11 @@ public final class Tuning {
         } else if (param.integer() && value != Math.rint(value)) {
           problems.add(key + " = " + text + ": must be a whole number");
         } else {
-          param.set().accept(t, param.integer() ? (Number) (int) value : (Number) (float) value);
-          overrides++;
+          final Number number = param.integer() ? (Number) (int) value : (Number) (float) value;
+          param.set().accept(t, number);
+          if (number.doubleValue() != param.get().apply(defaults).doubleValue()) {
+            overrides++; // a value written down at its default changes nothing
+          }
         }
       } catch (NumberFormatException e) {
         problems.add(key + " = " + text + ": not a number");
