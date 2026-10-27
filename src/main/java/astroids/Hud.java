@@ -34,17 +34,14 @@ final class Hud {
   }
 
   /**
-   * Marks the boss: brackets around it when it is on screen, otherwise an arrow at the edge of the screen in its
-   * direction. {@code toBoss} is the shortest way from the camera to the boss, {@code view} the camera's rotation.
+   * Marks something: brackets around it when it is on screen, otherwise an arrow at the edge of the screen in its
+   * direction. {@code toTarget} is the shortest way from the camera to it, {@code view} the camera's rotation.
    */
-  static void bossMarker(UiCanvas ui, int width, int height, Vector3f toBoss, Quaternionf view, float fovDegrees,
-      String label) {
-    final var local = view.conjugate(new Quaternionf()).transform(new Vector3f(toBoss));
+  static void marker(UiCanvas ui, int width, int height, Vector3f toTarget, Quaternionf view, float fovDegrees,
+      String label, float r, float g, float b) {
+    final var local = view.conjugate(new Quaternionf()).transform(new Vector3f(toTarget));
     final float tanHalf = (float) Math.tan(Math.toRadians(fovDegrees) / 2);
     final float aspect = (float) width / height;
-    final float r = 1f;
-    final float g = 0.3f;
-    final float b = 0.25f;
     if (local.z < 0f) {
       final float nx = local.x / -local.z / (tanHalf * aspect);
       final float ny = local.y / -local.z / tanHalf;

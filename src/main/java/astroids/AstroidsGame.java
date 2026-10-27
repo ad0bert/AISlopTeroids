@@ -21,6 +21,8 @@ public final class AstroidsGame implements Game {
   private static final Logger log = LoggerFactory.getLogger(AstroidsGame.class);
   private Art art;
   private Settings scores;
+  private Settings settings;
+  private Options options;
 
   @Override
   public void init(Engine engine) {
@@ -35,21 +37,48 @@ public final class AstroidsGame implements Game {
     input.bind("start", KeyEvent.VK_ENTER);
     input.bindGamepad("start", Gamepad.BUTTON_START, Gamepad.BUTTON_A);
     input.bind("fullscreen", KeyEvent.VK_F11);
+    input.bind("options", KeyEvent.VK_O);
     this.scores = Settings.load(scoresFile(engine));
+    this.settings = Settings.load(settingsFile(engine));
+    this.options = Options.load(this.settings, engine.isFullscreen(), engine.isVsync());
+    this.options.apply(engine);
     engine.setDebugOverlayVisible(false); // it would cover the HUD; F3 still shows it
     // -Dastroids.autopilot=true: straight into a game that flies itself (screenshots, smoke tests)
     engine.states().push(Boolean.getBoolean("astroids.autopilot") ? new PlayState(this) : new TitleState(this));
+    if (Boolean.getBoolean("astroids.showOptions")) { // -Dastroids.showOptions=true: the options panel on top (screenshots)
+      engine.states().push(new SettingsState(this));
+    }
   }
 
   @Override
   public void update(Engine engine, double dt) {
     if (engine.input().wasActionPressed("fullscreen")) {
-      engine.setFullscreen(!engine.isFullscreen());
+      this.options.fullscreen = !this.options.fullscreen;
+      engine.setFullscreen(this.options.fullscreen);
+      saveOptions();
     }
   }
 
   Art art() {
     return this.art;
+  }
+
+  Options options() {
+    return this.options;
+  }
+
+  /** Swaps in other options (the defaults); they take effect at the next {@link Options#apply}. */
+  void replaceOptions(Options replacement) {
+    this.options = replacement;
+  }
+
+  void saveOptions() {
+    this.options.store(this.settings);
+    try {
+      this.settings.save();
+    } catch (IOException e) {
+      log.warn("Could not save the options to {}: {}", this.settings.file(), e.getMessage());
+    }
   }
 
   int highScore() {
@@ -68,6 +97,15 @@ public final class AstroidsGame implements Game {
       log.warn("Could not save the high score to {}: {}", this.scores.file(), e.getMessage());
     }
     return true;
+  }
+
+  private static Path settingsFile(Engine engine) {
+    try {
+      return engine.userDirs().config().resolve("settings.properties");
+    } catch (IOException e) {
+      log.warn("No config directory ({}); the options are kept next to the game", e.getMessage());
+      return Path.of("simple-astroids-settings.properties");
+    }
   }
 
   private static Path scoresFile(Engine engine) {

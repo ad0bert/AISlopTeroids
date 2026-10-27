@@ -24,8 +24,9 @@ import engine.render.UiCanvas;
  * {@code -Dastroids.autopilot=true} flies by itself (turning and firing), for screenshots and smoke tests.
  */
 final class PlayState extends LevelState {
-  private static final float MOUSE_DEGREES_PER_PIXEL = 0.1f;
   private static final float STICK_DEGREES_PER_SECOND = 140f;
+  /** With this many rocks or fewer left, each gets an on-screen marker, so the last ones are easy to find. */
+  static final int MARK_ROCKS_BELOW = 4;
 
   private final AstroidsGame game;
   private final boolean autopilot = Boolean.getBoolean("astroids.autopilot");
@@ -97,7 +98,7 @@ final class PlayState extends LevelState {
     if (!this.world.isGameOver()) {
       final boolean captured = engine.isMouseCaptured();
       if (input.wasActionPressed("pause") || (this.wasCaptured && !captured)) {
-        engine.states().push(new PauseState());
+        engine.states().push(new PauseState(this.game));
       }
       this.wasCaptured = captured;
     }
@@ -112,13 +113,14 @@ final class PlayState extends LevelState {
 
   private void look(Engine engine, float dt) {
     final var input = engine.input();
-    this.yaw -= input.consumeMouseDx() * MOUSE_DEGREES_PER_PIXEL;
-    this.pitch -= input.consumeMouseDy() * MOUSE_DEGREES_PER_PIXEL;
+    final var options = this.game.options();
+    this.yaw += options.yawFor(input.consumeMouseDx());
+    this.pitch += options.pitchFor(input.consumeMouseDy());
     final var pad = input.firstGamepad();
     if (pad != null) {
       final var look = pad.rightStick(this.stick);
       this.yaw -= look.x * STICK_DEGREES_PER_SECOND * dt;
-      this.pitch += look.y * STICK_DEGREES_PER_SECOND * dt;
+      this.pitch += (options.invertY ? -look.y : look.y) * STICK_DEGREES_PER_SECOND * dt;
     }
     if (this.autopilot) {
       this.yaw += 25f * dt;
@@ -201,11 +203,25 @@ final class PlayState extends LevelState {
     final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
     Hud.text(ui, speed, 16f, height - ui.lineHeight(1.1f) - 14f, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
 
+    final var view = this.camera.transform().rotation();
+    final float fov = this.camera.get(Camera.class).fovDegrees;
+    final var rocks = this.world.asteroids();
+    if (rocks.size() < MARK_ROCKS_BELOW) {
+      final var toRock = new Vector3f();
+      for (var rock : rocks) {
+        World.delta(ship.position, rock.position, toRock);
+        Hud.marker(ui, width, height, toRock, view, fov, String.format(Locale.ROOT, "ROCK %.0f m", toRock.length()),
+            0.85f, 0.85f, 0.9f);
+      }
+    }
     final var boss = this.world.boss();
     if (boss != null) {
       final var toBoss = World.delta(ship.position, boss.position, new Vector3f());
-      Hud.bossMarker(ui, width, height, toBoss, this.camera.transform().rotation(),
-          this.camera.get(Camera.class).fovDegrees, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()));
+      Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()),
+          1f, 0.3f, 0.25f);
+    }
+    if (this.game.options().radar) {
+      Radar.draw(ui, width, height, this.world, ship.position, view);
     }
     if (this.time < this.messageUntil) {
       final float fade = Math.min(1f, (this.messageUntil - this.time) * 2f);

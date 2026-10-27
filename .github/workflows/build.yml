@@ -23,7 +23,7 @@ jobs:
           mvn -B -q install -DskipTests -pl engine -am
       - run: mvn -B verify
       # Runs the game on Mesa's software OpenGL in a virtual X server (GL errors throw) and keeps the last frames:
-      # the title screen, and a game flying itself.
+      # the title screen, a game flying itself, and the options panel.
       - name: Smoke-run the game (Xvfb + Mesa)
         run: |
           sudo apt-get update -q
@@ -38,6 +38,7 @@ jobs:
           }
           run title 90
           run play 600 -Dastroids.autopilot=true
+          run options 60 -Dastroids.showOptions=true
       - uses: actions/upload-artifact@v7
         if: always()
         with:
