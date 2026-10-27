@@ -30,7 +30,7 @@ The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
 The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, ambience volume, fullscreen,
 vsync and the radar. Changes take effect at once and are saved in your user config directory.
 
-Ambience: the title screen has a slow, airy drone. In the game, a darker drone plays under the engine hum, which rises
+Ambience: the title screen has a warm, breathing pad with a soft, low synth arpeggio inside it. In the game, a darker drone plays under the engine hum, which rises
 with your speed, and a low throb swells while an enemy ship is around.
 
 ### Rules

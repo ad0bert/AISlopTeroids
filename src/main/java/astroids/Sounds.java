@@ -127,16 +127,142 @@ final class Sounds {
   private record Tone(double freq, float level, int swells, double phase) {
   }
 
-  /** The title screen: a slow, open drone in A with soft space wind. Stereo, 24 seconds. */
+  /**
+   * The title screen: a warm, slowly breathing pad over Am, F, C and G with a soft synth arpeggio low inside it, its
+   * echo going from side to side, and a little space wind. 90 bpm, stereo, 16 seconds (four chords of 4 seconds).
+   */
   static AudioData titleAmbience() {
-    final float seconds = 24f;
-    final Tone[] left = { new Tone(55, 0.20f, 1, 0.0), new Tone(82.5, 0.20f, 2, 0.3), new Tone(110, 0.16f, 3, 0.6),
-        new Tone(165, 0.10f, 2, 0.1), new Tone(220, 0.07f, 3, 0.4), new Tone(330, 0.045f, 4, 0.9),
-        new Tone(440, 0.025f, 5, 0.25) };
-    final Tone[] right = { new Tone(55.25, 0.20f, 1, 0.5), new Tone(82.5, 0.20f, 2, 0.8), new Tone(110.25, 0.16f, 3, 0.1),
-        new Tone(165, 0.10f, 2, 0.6), new Tone(220.25, 0.07f, 3, 0.9), new Tone(330, 0.045f, 4, 0.4),
-        new Tone(440.25, 0.025f, 5, 0.75) };
-    return stereo(drone(seconds, left, 0.16f, 0.09f, 5L), drone(seconds, right, 0.16f, 0.09f, 6L), 0.45f);
+    final float seconds = 16f;
+    final int n = (int) (RATE * seconds);
+    final double chordSeconds = 4.0;
+    final double eighth = 60.0 / 90 / 2;
+    // root, third, fifth, octave
+    final double[][] chords = { { 220, 261.63, 329.63, 440 }, { 174.61, 220, 261.63, 349.23 },
+        { 261.63, 329.63, 392, 523.25 }, { 196, 246.94, 293.66, 392 } };
+    final float[][] pad = new float[2][n];
+    final float[][] arp = new float[2][n];
+    final double[][] detune = { { 1, 1.003 }, { 0.998, 1.004 } }; // a slight chorus, different on each side
+    for (int k = 0; k < chords.length; k++) {
+      final double[] chord = chords[k];
+      final double start = k * chordSeconds;
+      // the pad: the chord an octave down, each tone on two slightly detuned voices, fading into the next chord
+      final double length = chordSeconds + 1.6;
+      for (int c = 0; c < 2; c++) {
+        final float[] sound = new float[(int) (RATE * length)];
+        for (int i = 0; i < sound.length; i++) {
+          final double t = (double) i / RATE;
+          final double env = Math.sin(Math.PI * Math.min(1, t / 1.6) / 2) * Math.sin(Math.PI
+              * Math.min(1, (length - t) / 1.6) / 2);
+          double v = 0;
+          for (double d : detune[c]) {
+            for (int tone = 0; tone < 3; tone++) {
+              v += softSaw(2 * Math.PI * chord[tone] / 2 * d * t);
+            }
+            v += 0.5 * softSaw(2 * Math.PI * chord[0] / 4 * d * t); // a soft bass under it
+          }
+          sound[i] = (float) (v * env);
+        }
+        addLooped(pad[c], (int) Math.round((start - 0.8) * RATE), sound, 1f);
+      }
+      // the arpeggio, low: up and down the chord in eighths, with a ping-pong echo
+      final int[] pattern = { 0, 1, 2, 3, 2, 1 };
+      for (int step = 0; step < 12; step++) {
+        final float[] note = pluck(chord[pattern[step % pattern.length]] / 2);
+        final int at = (int) Math.round((start + step * eighth) * RATE);
+        addLooped(arp[0], at, note, 1f);
+        addLooped(arp[1], at, note, 1f);
+        float level = 1f;
+        for (int e = 1; e <= 4; e++) {
+          level *= 0.42f;
+          addLooped(arp[e % 2], at + (int) Math.round(e * 0.5 * RATE), note, level);
+        }
+      }
+    }
+    final float[][] out = new float[2][];
+    for (int c = 0; c < 2; c++) {
+      final int side = c;
+      // the pad breathes: a low-pass opening and closing once per loop (a little later on the right)
+      final float[] warm = lowpassLoop(pad[c],
+          u -> 0.05 + 0.1 * (0.5 + 0.5 * Math.sin(2 * Math.PI * (u + 0.1 * side))));
+      final float[] soft = lowpassLoop(arp[c], u -> 0.3);
+      final float[] wind = unitRms(loopNoise(n, 20L + c, u -> 0.08f));
+      final float padLevel = rms(warm);
+      final float arpLevel = 0.55f * padLevel / Math.max(1e-6f, rms(soft));
+      out[c] = new float[n];
+      for (int i = 0; i < n; i++) {
+        out[c][i] = warm[i] + arpLevel * soft[i] + 0.15f * padLevel * wind[i];
+      }
+    }
+    return stereo(out[0], out[1], 0.45f);
+  }
+
+  /** One period of a soft sawtooth (eight harmonics, falling off quickly), looked up instead of summed every sample. */
+  private static final float[] SOFT_SAW = new float[4096];
+
+  static {
+    for (int i = 0; i < SOFT_SAW.length; i++) {
+      final double phase = 2 * Math.PI * i / SOFT_SAW.length;
+      double v = 0;
+      for (int h = 1; h <= 8; h++) {
+        v += Math.sin(h * phase) / Math.pow(h, 1.6);
+      }
+      SOFT_SAW[i] = (float) v;
+    }
+  }
+
+  private static double softSaw(double phase) {
+    final double x = phase / (2 * Math.PI) * SOFT_SAW.length;
+    final double floor = Math.floor(x);
+    final int i = (int) (floor % SOFT_SAW.length);
+    final double f = x - floor;
+    return SOFT_SAW[i] + f * (SOFT_SAW[(i + 1) % SOFT_SAW.length] - SOFT_SAW[i]);
+  }
+
+  /** A soft synth pluck: a quick attack and a decay of about half a second. */
+  private static float[] pluck(double f) {
+    final float[] out = new float[(int) (RATE * 1.2)];
+    for (int i = 0; i < out.length; i++) {
+      final double t = (double) i / RATE;
+      final double p = 2 * Math.PI * f * t;
+      final double env = Math.min(1, t / 0.005) * Math.exp(-t * 5.5);
+      out[i] = (float) ((Math.sin(p) + 0.3 * Math.sin(2 * p) + 0.12 * Math.sin(3 * p)) * env);
+    }
+    return out;
+  }
+
+  /** Adds a sound into a loop at {@code at}, wrapping round its end. */
+  private static void addLooped(float[] loop, int at, float[] sound, float level) {
+    for (int i = 0; i < sound.length; i++) {
+      loop[Math.floorMod(at + i, loop.length)] += sound[i] * level;
+    }
+  }
+
+  /**
+   * A two-pole low-pass over a loop, run twice round so that the filter has settled where the loop starts: the output
+   * joins as cleanly as the input. The cutoff (0..1) may follow the loop position.
+   */
+  private static float[] lowpassLoop(float[] in, java.util.function.DoubleUnaryOperator cutoff) {
+    final int n = in.length;
+    final float[] out = new float[n];
+    double a = 0;
+    double b = 0;
+    for (int pass = 0; pass < 2; pass++) {
+      for (int i = 0; i < n; i++) {
+        final double c = cutoff.applyAsDouble((double) i / n);
+        a += c * (in[i] - a);
+        b += c * (a - b);
+        out[i] = (float) b;
+      }
+    }
+    return out;
+  }
+
+  private static float rms(float[] samples) {
+    double sum = 0;
+    for (float s : samples) {
+      sum += s * s;
+    }
+    return (float) Math.sqrt(sum / samples.length);
   }
 
   /** In the game: darker and lower, with more space wind blowing through it. Stereo, 20 seconds. */
@@ -145,7 +271,8 @@ final class Sounds {
     final Tone[] left = { new Tone(41.2, 0.20f, 1, 0.0), new Tone(61.8, 0.14f, 2, 0.4), new Tone(82.4, 0.12f, 3, 0.2),
         new Tone(98, 0.06f, 1, 0.7), new Tone(123.6, 0.06f, 2, 0.15), new Tone(164.8, 0.035f, 3, 0.55),
         new Tone(246.95, 0.02f, 4, 0.85), new Tone(493.9, 0.008f, 5, 0.3) };
-    final Tone[] right = { new Tone(41.25, 0.20f, 1, 0.5), new Tone(61.8, 0.14f, 2, 0.9), new Tone(82.45, 0.12f, 3, 0.7),
+    final Tone[] right = { new Tone(41.25, 0.20f, 1, 0.5), new Tone(61.8, 0.14f, 2, 0.9),
+        new Tone(82.45, 0.12f, 3, 0.7),
         new Tone(98, 0.06f, 1, 0.2), new Tone(123.6, 0.06f, 2, 0.65), new Tone(164.85, 0.035f, 3, 0.05),
         new Tone(246.95, 0.02f, 4, 0.35), new Tone(493.9, 0.008f, 5, 0.8) };
     return stereo(drone(seconds, left, 0.36f, 0.08f, 7L), drone(seconds, right, 0.36f, 0.08f, 8L), 0.45f);
