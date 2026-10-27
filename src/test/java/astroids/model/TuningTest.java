@@ -126,6 +126,7 @@ class TuningTest {
     p.setProperty("rocks.firstWave", "12");
     final var onHard = Tuning.from(p, Difficulty.HARD);
     assertFalse(onHard.custom(), "Hard already has 12");
+    assertEquals(0, onHard.overrides());
     final var onNormal = Tuning.from(p, Difficulty.NORMAL);
     assertTrue(onNormal.custom());
     assertEquals(12, onNormal.tuning().firstWaveRocks);
@@ -139,6 +140,38 @@ class TuningTest {
     final var missing = Tuning.load(this.dir.resolve("none.properties"), Difficulty.EASY);
     assertFalse(missing.custom());
     assertEquals(6, missing.tuning().firstWaveRocks);
+  }
+
+  @Test
+  void aFileWithTheReleasedValuesLeavesEveryDifficultyAsItIs() throws IOException {
+    // the playtest values of v0.2.1 that became the defaults in v0.3.0
+    final var file = """
+        rocks.firstWave = 10
+        rocks.max = 120
+        rocks.minSpeed = 13
+        rocks.maxSpeed = 16
+        enemy.speed = 20
+        enemy.fireInterval = 0.5
+        enemy.aimErrorDegrees = 1.44
+        """;
+    final var p = new Properties();
+    p.load(new StringReader(file));
+    for (Difficulty d : Difficulty.values()) {
+      final var loaded = Tuning.from(p, d);
+      assertFalse(loaded.custom(), d + " is not custom");
+      assertTrue(loaded.problems().isEmpty(), loaded.problems().toString());
+      final var expected = Tuning.of(d);
+      assertEquals(expected.firstWaveRocks, loaded.tuning().firstWaveRocks, d.toString());
+      assertEquals(expected.rockMaxSpeed, loaded.tuning().rockMaxSpeed, d.toString());
+      assertEquals(expected.enemyFireInterval, loaded.tuning().enemyFireInterval, d.toString());
+    }
+    // a value that differs from Normal's still counts, on every difficulty
+    p.setProperty("rocks.firstWave", "8");
+    final var hard = Tuning.from(p, Difficulty.HARD);
+    assertTrue(hard.custom());
+    assertEquals(1, hard.overrides());
+    assertEquals(8, hard.tuning().firstWaveRocks);
+    assertEquals(Tuning.of(Difficulty.HARD).rockMaxSpeed, hard.tuning().rockMaxSpeed);
   }
 
   @Test

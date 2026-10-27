@@ -72,8 +72,9 @@ hyperspace and the arena size can all be changed without rebuilding:
    the values. For example, `ship.maxSpeed = 35` or `enemy.fireInterval = 2.5`.
 3. Start a new game. The file is read again for every game, so restarting the program isn't necessary.
 
-Values in the file apply on top of the chosen difficulty, whichever it is. While values differ from that difficulty's,
-the game shows "CUSTOM TUNING" and doesn't record best scores. The title screen shows the first unknown key or unusable
+Values in the file apply on top of the chosen difficulty, whichever it is. A value at its Normal default changes
+nothing, on any difficulty: Easy and Hard keep their own. While values differ from the difficulty's, the game shows
+"CUSTOM TUNING" and doesn't record best scores. The title screen shows the first unknown key or unusable
 value, which keeps its default. Delete the file to play as released.
 
 ## Build and run

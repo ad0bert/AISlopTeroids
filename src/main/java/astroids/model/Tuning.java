@@ -218,12 +218,14 @@ public final class Tuning {
   }
 
   /**
-   * A difficulty's values with those in {@code p} on top. Only values that differ from the difficulty's count as
-   * changed; unknown keys and unusable values are reported, not applied.
+   * A difficulty's values with those in {@code p} on top. A value at its released (Normal) default changes nothing on
+   * any difficulty, so a file that writes the defaults down leaves Easy and Hard as they are. Only values that end up
+   * different from the difficulty's count as changed; unknown keys and unusable values are reported, not applied.
    */
   public static Loaded from(Properties p, Difficulty difficulty) {
     final var t = of(difficulty);
     final var defaults = of(difficulty);
+    final var released = new Tuning();
     final List<String> problems = new ArrayList<>();
     int overrides = 0;
     for (String key : p.stringPropertyNames()) {
@@ -243,9 +245,12 @@ public final class Tuning {
           problems.add(key + " = " + text + ": must be a whole number");
         } else {
           final Number number = param.integer() ? (Number) (int) value : (Number) (float) value;
+          if (number.doubleValue() == param.get().apply(released).doubleValue()) {
+            continue; // written down at its default: changes nothing, and Easy and Hard keep their own value
+          }
           param.set().accept(t, number);
           if (number.doubleValue() != param.get().apply(defaults).doubleValue()) {
-            overrides++; // a value written down at its default changes nothing
+            overrides++;
           }
         }
       } catch (NumberFormatException e) {
@@ -305,7 +310,7 @@ public final class Tuning {
       w.write("# line and change the value. It is read again for every new game. Games with changed values do not\n");
       w.write("# set a best score. This file is rewritten at every start; edit tuning.properties, not this one.\n");
       w.write("# The values below are Normal's; the other difficulties start from the values in brackets. A value set\n");
-      w.write("# in tuning.properties counts for every difficulty.\n");
+      w.write("# in tuning.properties counts for every difficulty, unless it is Normal's: that changes nothing.\n");
       String group = "";
       for (Param p : PARAMS.values()) {
         final var prefix = p.key().substring(0, p.key().indexOf('.'));
