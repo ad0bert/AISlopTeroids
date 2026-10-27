@@ -127,19 +127,19 @@ final class Sounds {
   private record Tone(double freq, float level, int swells, double phase) {
   }
 
-  /** The title screen: a slow, open drone in A with a faint shimmer above and soft space wind. Stereo, 24 seconds. */
+  /** The title screen: a slow, open drone in A with soft space wind. Stereo, 24 seconds. */
   static AudioData titleAmbience() {
     final float seconds = 24f;
     final Tone[] left = { new Tone(55, 0.20f, 1, 0.0), new Tone(82.5, 0.20f, 2, 0.3), new Tone(110, 0.16f, 3, 0.6),
         new Tone(165, 0.10f, 2, 0.1), new Tone(220, 0.07f, 3, 0.4), new Tone(330, 0.045f, 4, 0.9),
-        new Tone(440, 0.025f, 5, 0.25), new Tone(880, 0.012f, 3, 0.2), new Tone(1320, 0.008f, 4, 0.7) };
+        new Tone(440, 0.025f, 5, 0.25) };
     final Tone[] right = { new Tone(55.25, 0.20f, 1, 0.5), new Tone(82.5, 0.20f, 2, 0.8), new Tone(110.25, 0.16f, 3, 0.1),
         new Tone(165, 0.10f, 2, 0.6), new Tone(220.25, 0.07f, 3, 0.9), new Tone(330, 0.045f, 4, 0.4),
-        new Tone(440.25, 0.025f, 5, 0.75), new Tone(880.25, 0.012f, 3, 0.9), new Tone(1320, 0.008f, 4, 0.2) };
+        new Tone(440.25, 0.025f, 5, 0.75) };
     return stereo(drone(seconds, left, 0.16f, 0.09f, 5L), drone(seconds, right, 0.16f, 0.09f, 6L), 0.45f);
   }
 
-  /** In the game: darker and lower, with a deeper rumble under it. Stereo, 20 seconds. */
+  /** In the game: darker and lower, with more space wind blowing through it. Stereo, 20 seconds. */
   static AudioData playAmbience() {
     final float seconds = 20f;
     final Tone[] left = { new Tone(41.2, 0.20f, 1, 0.0), new Tone(61.8, 0.14f, 2, 0.4), new Tone(82.4, 0.12f, 3, 0.2),
@@ -148,17 +148,27 @@ final class Sounds {
     final Tone[] right = { new Tone(41.25, 0.20f, 1, 0.5), new Tone(61.8, 0.14f, 2, 0.9), new Tone(82.45, 0.12f, 3, 0.7),
         new Tone(98, 0.06f, 1, 0.2), new Tone(123.6, 0.06f, 2, 0.65), new Tone(164.85, 0.035f, 3, 0.05),
         new Tone(246.95, 0.02f, 4, 0.35), new Tone(493.9, 0.008f, 5, 0.8) };
-    return stereo(drone(seconds, left, 0.18f, 0.05f, 7L), drone(seconds, right, 0.18f, 0.05f, 8L), 0.45f);
+    return stereo(drone(seconds, left, 0.36f, 0.08f, 7L), drone(seconds, right, 0.36f, 0.08f, 8L), 0.45f);
   }
 
-  /** The ship's engine: a low hum with a little hiss, 2 seconds; the game sets its pitch and volume by speed. */
+  /**
+   * The ship's engine: a steady rumble with a little hiss and a quiet hum under it, without swells, 4 seconds; the game
+   * sets its pitch and volume by speed.
+   */
   static AudioData engineHum() {
-    final float seconds = 2f;
-    final var tones = new Tone[6];
-    for (int h = 1; h <= tones.length; h++) {
-      tones[h - 1] = new Tone(55 * h, 0.3f / h, h % 2 == 0 ? 2 : 1, h * 0.17);
+    final int n = RATE * 4;
+    final float[] rumble = unitRms(loopNoise(n, 9L, u -> 0.05f));
+    final float[] hiss = unitRms(loopNoise(n, 10L, u -> 0.3f));
+    final float[] out = new float[n];
+    for (int i = 0; i < n; i++) {
+      final double t = (double) i / RATE;
+      double hum = 0;
+      for (int h = 1; h <= 5; h++) {
+        hum += Math.sin(2 * Math.PI * 55 * h * t) / h;
+      }
+      out[i] = rumble[i] + 0.2f * hiss[i] + 0.25f * (float) hum;
     }
-    return AudioData.mono(RATE, normalize(drone(seconds, tones, 0.12f, 0.3f, 9L), 0.5f));
+    return AudioData.mono(RATE, normalize(out, 0.5f));
   }
 
   /** While an enemy ship is about: a low, slightly sour throb, two beats a second. 4 seconds. */
@@ -183,18 +193,7 @@ final class Sounds {
    */
   private static float[] drone(float seconds, Tone[] tones, float wind, float brightness, long seed) {
     final int n = (int) (RATE * seconds);
-    final int fade = RATE; // one second of noise crossfade
-    final float[] noise = new float[n + fade];
-    final var rnd = new Random(seed);
-    float lp = 0f;
-    float lp2 = 0f;
-    for (int i = 0; i < noise.length; i++) {
-      final double u = (double) (i % n) / n;
-      final float cutoff = brightness * (float) (0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * u));
-      lp += (0.002f + cutoff) * ((rnd.nextFloat() * 2f - 1f) - lp);
-      lp2 += (0.002f + cutoff) * (lp - lp2);
-      noise[i] = lp2;
-    }
+    final float[] noise = loopNoise(n, seed, u -> brightness * (float) (0.5 + 0.5 * Math.sin(2 * Math.PI * 2 * u)));
     final float[] out = new float[n];
     for (int i = 0; i < n; i++) {
       final double t = (double) i / RATE;
@@ -207,14 +206,51 @@ final class Sounds {
         v += tone.level() * swell * (Math.sin(phase) + 0.35 * Math.sin(2 * phase) + 0.18 * Math.sin(3 * phase)
             + 0.08 * Math.sin(4 * phase));
       }
-      float w = noise[i];
-      if (i < fade) { // the loop's start blends in from the noise just after its end
-        final float k = (float) i / fade;
-        w = noise[i] * k + noise[i + n] * (1f - k);
-      }
-      out[i] = (float) v + wind * 6f * w;
+      out[i] = (float) v + wind * 6f * noise[i];
     }
     return out;
+  }
+
+  /**
+   * {@code n} samples of noise through a two-pole low-pass whose cutoff (0..1) may change over the loop ({@code u} from
+   * 0 to 1), made to loop: it is made a second longer and its end faded into its start (at equal power, so the level
+   * does not dip there).
+   */
+  private static float[] loopNoise(int n, long seed, java.util.function.DoubleFunction<Float> cutoff) {
+    final int fade = Math.min(RATE, n / 2);
+    final float[] raw = new float[n + fade];
+    final var rnd = new Random(seed);
+    float lp = 0f;
+    float lp2 = 0f;
+    for (int i = 0; i < raw.length; i++) {
+      final float c = 0.002f + cutoff.apply((double) (i % n) / n);
+      lp += c * ((rnd.nextFloat() * 2f - 1f) - lp);
+      lp2 += c * (lp - lp2);
+      raw[i] = lp2;
+    }
+    final float[] out = new float[n];
+    for (int i = 0; i < n; i++) {
+      if (i < fade) { // the loop's start blends in from the noise just after its end
+        final double k = (double) i / fade;
+        out[i] = (float) (raw[i] * Math.sqrt(k) + raw[i + n] * Math.sqrt(1 - k));
+      } else {
+        out[i] = raw[i];
+      }
+    }
+    return out;
+  }
+
+  /** Scales to a root-mean-square level of 1, so that layers can be mixed by their loudness. */
+  private static float[] unitRms(float[] samples) {
+    double sum = 0;
+    for (float s : samples) {
+      sum += s * s;
+    }
+    final float scale = (float) (1 / Math.sqrt(Math.max(1e-12, sum / samples.length)));
+    for (int i = 0; i < samples.length; i++) {
+      samples[i] *= scale;
+    }
+    return samples;
   }
 
   /** Scales so that the loudest sample is {@code peak}. */
