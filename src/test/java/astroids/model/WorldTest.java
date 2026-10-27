@@ -13,6 +13,12 @@ import org.junit.jupiter.api.Test;
 
 class WorldTest {
   private static final float DT = 1f / 60f;
+  /** The numbers as released, which World.newGame(seed) plays with. */
+  private static final Tuning T = new Tuning();
+
+  private static float dist(Vector3f a, Vector3f b) {
+    return World.delta(a, b, new Vector3f(), T.arena).length();
+  }
 
   private static Controls fireAt(Vector3f aim) {
     return new Controls(new Vector3f(), new Vector3f(aim).normalize(), true);
@@ -37,11 +43,11 @@ class WorldTest {
   void aNewGameStartsWithWaveOneAwayFromTheShip() {
     final var w = World.newGame(42L);
     assertEquals(1, w.wave());
-    assertEquals(World.START_LIVES, w.lives());
+    assertEquals(T.lives, w.lives());
     assertEquals(4, w.asteroids().size());
     for (Asteroid a : w.asteroids()) {
       assertEquals(Asteroid.Size.BIG, a.size);
-      assertTrue(World.distance(a.position, w.ship().position) >= World.SAFE_DISTANCE);
+      assertTrue(dist(a.position, w.ship().position) >= T.safeDistance);
     }
     assertEquals(List.of(new GameEvent.WaveStarted(1)), w.drainEvents());
     assertTrue(w.drainEvents().isEmpty(), "drained");
@@ -57,7 +63,7 @@ class WorldTest {
     final var pieces = w.asteroids();
     assertEquals(2, pieces.size(), "one shot split it");
     assertTrue(pieces.stream().allMatch(a -> a.size == Asteroid.Size.SMALL));
-    assertTrue(w.score() >= World.BIG_SCORE);
+    assertTrue(w.score() >= T.scoreBigRock);
     assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.AsteroidDestroyed d
         && d.size() == Asteroid.Size.BIG));
 
@@ -68,7 +74,7 @@ class WorldTest {
     run(w2, 0.3f, Controls.NONE);
     assertFalse(w2.asteroids().contains(small));
     assertTrue(w2.asteroids().isEmpty());
-    assertEquals(World.SMALL_SCORE, w2.score());
+    assertEquals(T.scoreSmallRock, w2.score());
   }
 
   @Test
@@ -79,9 +85,9 @@ class WorldTest {
     run(w, 0.3f, Controls.NONE);
     final var a = w.asteroids().get(0);
     final var b = w.asteroids().get(1);
-    final float before = World.distance(a.position, b.position);
+    final float before = dist(a.position, b.position);
     run(w, 1f, Controls.NONE);
-    assertTrue(World.distance(a.position, b.position) > before + 3f, "they separate");
+    assertTrue(dist(a.position, b.position) > before + 3f, "they separate");
   }
 
   @Test
@@ -90,7 +96,7 @@ class WorldTest {
     w.step(DT, fireAt(new Vector3f(1f, 0f, 0f)));
     w.step(DT, fireAt(new Vector3f(1f, 0f, 0f)));
     assertEquals(1, w.bullets().size(), "the second shot waits for the cooldown");
-    run(w, World.BULLET_TIME + 0.1f, Controls.NONE);
+    run(w, T.bulletTime + 0.1f, Controls.NONE);
     assertTrue(w.bullets().isEmpty());
   }
 
@@ -99,12 +105,12 @@ class WorldTest {
     final var w = empty();
     w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(0f, 0f, -3f), new Vector3f(0f, 0f, 10f));
     run(w, 0.5f, Controls.NONE);
-    assertEquals(World.START_LIVES - 1, w.lives());
+    assertEquals(T.lives - 1, w.lives());
     assertFalse(w.ship().alive);
     final var events = w.drainEvents();
     assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.ShipDestroyed));
 
-    run(w, World.RESPAWN_DELAY + 0.1f, Controls.NONE);
+    run(w, T.respawnDelay + 0.1f, Controls.NONE);
     assertTrue(w.ship().alive);
     assertTrue(w.ship().invulnerable > 0f);
     assertEquals(0f, w.ship().position.length(), 1e-4f, "back in the middle");
@@ -112,17 +118,17 @@ class WorldTest {
     // while protected, rocks pass through
     w.addAsteroid(Asteroid.Size.BIG, new Vector3f(), new Vector3f());
     run(w, 1f, Controls.NONE);
-    assertEquals(World.START_LIVES - 1, w.lives());
+    assertEquals(T.lives - 1, w.lives());
   }
 
   @Test
   void losingTheLastLifeEndsTheGame() {
     final var w = empty();
-    for (int i = 0; i < World.START_LIVES; i++) {
+    for (int i = 0; i < T.lives; i++) {
       w.ship().invulnerable = 0f;
       w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(w.ship().position), new Vector3f());
       w.step(DT, Controls.NONE);
-      run(w, World.RESPAWN_DELAY + 0.1f, Controls.NONE);
+      run(w, T.respawnDelay + 0.1f, Controls.NONE);
     }
     assertTrue(w.isGameOver());
     assertEquals(0, w.lives());
@@ -136,7 +142,7 @@ class WorldTest {
   @Test
   void theNextWaveStartsWhenTheRocksAreGone() {
     final var w = empty();
-    run(w, World.WAVE_DELAY + 0.1f, Controls.NONE);
+    run(w, T.waveDelay + 0.1f, Controls.NONE);
     assertEquals(2, w.wave());
     assertEquals(5, w.asteroids().size(), "one more big asteroid per wave");
     assertTrue(w.drainEvents().contains(new GameEvent.WaveStarted(2)));
@@ -150,14 +156,14 @@ class WorldTest {
     boss.position.set(0f, 0f, -30f);
     boss.velocity.zero();
     boss.turnTimer = 100f; // keep it still
-    run(w, World.BOSS_FIRE_INTERVAL + 0.1f, Controls.NONE);
+    run(w, T.enemyFireInterval + 0.1f, Controls.NONE);
     final var shots = w.bullets().stream().filter(b -> b.fromBoss).toList();
     assertEquals(1, shots.size());
-    final var toShip = World.delta(shots.get(0).position, w.ship().position, new Vector3f()).normalize();
+    final var toShip = World.delta(shots.get(0).position, w.ship().position, new Vector3f(), T.arena).normalize();
     final var heading = new Vector3f(shots.get(0).velocity).normalize();
-    assertTrue(toShip.dot(heading) > Math.cos(World.BOSS_SPREAD * 1.5), "aimed at the player, give or take");
+    assertTrue(toShip.dot(heading) > Math.cos((float) Math.toRadians(T.enemyAimErrorDegrees) * 1.5), "aimed at the player, give or take");
 
-    for (int hit = 1; hit <= World.BOSS_HEALTH; hit++) {
+    for (int hit = 1; hit <= T.enemyHealth; hit++) {
       w.ship().fireCooldown = 0f;
       w.step(DT, fireAt(new Vector3f(boss.position).normalize()));
       run(w, 0.6f, Controls.NONE);
@@ -165,7 +171,7 @@ class WorldTest {
     }
     assertNull(w.boss(), "gone after three hits");
     assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.BossDestroyed));
-    assertEquals(2 * World.BOSS_HIT_SCORE + World.BOSS_SCORE, w.score());
+    assertEquals(2 * T.scoreEnemyHit + T.scoreEnemyDestroyed, w.score());
   }
 
   @Test
@@ -175,8 +181,8 @@ class WorldTest {
     boss.position.set(0f, 0f, -20f);
     boss.velocity.zero();
     boss.turnTimer = 100f;
-    run(w, World.BOSS_FIRE_INTERVAL + 1.2f, Controls.NONE);
-    assertEquals(World.START_LIVES - 1, w.lives());
+    run(w, T.enemyFireInterval + 1.2f, Controls.NONE);
+    assertEquals(T.lives - 1, w.lives());
   }
 
   @Test
@@ -184,26 +190,26 @@ class WorldTest {
     final var w = empty();
     w.summonBoss();
     w.ship().invulnerable = 1000f;
-    run(w, World.BOSS_STAY + 0.1f, Controls.NONE);
+    run(w, T.enemyStay + 0.1f, Controls.NONE);
     assertNull(w.boss());
     assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.BossLeft));
   }
 
   @Test
   void theArenaWrapsAround() {
-    final var p = new Vector3f(World.ARENA + 1f, -World.ARENA - 2f, 3f);
-    World.wrap(p);
-    assertEquals(-World.ARENA + 1f, p.x, 1e-4f);
-    assertEquals(World.ARENA - 2f, p.y, 1e-4f);
+    final var p = new Vector3f(T.arena + 1f, -T.arena - 2f, 3f);
+    World.wrap(p, T.arena);
+    assertEquals(-T.arena + 1f, p.x, 1e-4f);
+    assertEquals(T.arena - 2f, p.y, 1e-4f);
     assertEquals(3f, p.z, 1e-4f);
-    final var a = new Vector3f(World.ARENA - 1f, 0f, 0f);
-    final var b = new Vector3f(-World.ARENA + 1f, 0f, 0f);
-    assertEquals(2f, World.distance(a, b), 1e-4f, "the short way, through the wall");
+    final var a = new Vector3f(T.arena - 1f, 0f, 0f);
+    final var b = new Vector3f(-T.arena + 1f, 0f, 0f);
+    assertEquals(2f, dist(a, b), 1e-4f, "the short way, through the wall");
 
     // an asteroid touching across the wall still hits
     final var w = empty();
-    w.ship().position.set(World.ARENA - 0.5f, 0f, 0f);
-    w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(-World.ARENA + 1f, 0f, 0f), new Vector3f());
+    w.ship().position.set(T.arena - 0.5f, 0f, 0f);
+    w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(-T.arena + 1f, 0f, 0f), new Vector3f());
     w.step(DT, Controls.NONE);
     assertFalse(w.ship().alive);
   }
@@ -213,7 +219,7 @@ class WorldTest {
     final var w = empty();
     final var forward = new Controls(new Vector3f(0f, 0f, -1f), new Vector3f(0f, 0f, -1f), false);
     run(w, 3f, forward);
-    assertEquals(World.SHIP_MAX_SPEED, w.ship().velocity.length(), 0.5f);
+    assertEquals(T.shipMaxSpeed, w.ship().velocity.length(), 0.5f);
     run(w, 6f, Controls.NONE);
     assertTrue(w.ship().velocity.length() < 0.5f);
   }

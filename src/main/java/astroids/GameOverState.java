@@ -10,14 +10,16 @@ final class GameOverState implements GameState {
   private final PlayState play;
   private final int score;
   private final boolean best;
+  private final boolean custom;
   private Clicks clicks;
   private float time;
 
-  GameOverState(AstroidsGame game, PlayState play, int score, boolean best) {
+  GameOverState(AstroidsGame game, PlayState play, int score, boolean best, boolean custom) {
     this.game = game;
     this.play = play;
     this.score = score;
     this.best = best;
+    this.custom = custom;
   }
 
   @Override
@@ -41,7 +43,9 @@ final class GameOverState implements GameState {
     Hud.dim(ui, width, height, Math.min(0.45f, this.time * 0.3f));
     Hud.centered(ui, "GAME OVER", width, height * 0.33f, 3.5f, 1f, 0.35f, 0.3f, 1f);
     Hud.centered(ui, "Score  " + this.score, width, height * 0.33f + ui.lineHeight(3.5f) + 10f, 2f, 1f, 1f, 1f, 1f);
-    if (this.best) {
+    if (this.custom) {
+      Hud.centered(ui, "Custom tuning: no best score", width, height * 0.55f, 1.3f, 1f, 0.75f, 0.3f, 1f);
+    } else if (this.best) {
       Hud.centered(ui, "New best score!", width, height * 0.55f, 1.6f, 0.95f, 0.85f, 0.45f, 1f);
     } else {
       Hud.centered(ui, "Best  " + this.game.highScore(), width, height * 0.55f, 1.3f, 0.8f, 0.8f, 0.8f, 1f);

@@ -10,10 +10,11 @@ import engine.render.UiCanvas;
 /**
  * A round radar in the corner of the screen: what is around the ship, seen from above with the view direction pointing
  * up. A line from each blip shows whether the thing is above (line up) or below (line down) the ship's plane. Covers the
- * whole arena (the farthest point of the wrap-around cube is {@code ARENA * sqrt(3)} away).
+ * whole arena, whatever its size (the farthest point of the wrap-around cube is {@code sqrt(3)} half-sizes away).
  */
 final class Radar {
-  static final float RANGE = World.ARENA * 1.75f;
+  /** How far the radar reaches, in arena half-sizes: the farthest point of the cube is sqrt(3) of them away. */
+  static final float RANGE_IN_ARENAS = 1.75f;
 
   /** Where something appears on the radar: x to the right, y ahead, height up; each -1..1 of the radar's radius. */
   record Blip(float x, float y, float height) {
@@ -51,13 +52,14 @@ final class Radar {
     ui.drawRect(cx - 0.5f, cy - 12f, 1f, 9f, 0.6f, 1f, 0.8f, 0.8f);
 
     final var delta = new Vector3f();
+    final float range = world.arena() * RANGE_IN_ARENAS;
     for (Asteroid a : world.asteroids()) {
-      final var b = project(World.delta(ship, a.position, delta), view, RANGE);
+      final var b = project(world.delta(ship, a.position, delta), view, range);
       final boolean big = a.size == Asteroid.Size.BIG;
       blip(ui, cx, cy, r, b, big ? 4f : 3f, 0.8f, 0.78f, 0.72f);
     }
     if (world.boss() != null) {
-      blip(ui, cx, cy, r, project(World.delta(ship, world.boss().position, delta), view, RANGE), 5f, 1f, 0.3f, 0.25f);
+      blip(ui, cx, cy, r, project(world.delta(ship, world.boss().position, delta), view, range), 5f, 1f, 0.3f, 0.25f);
     }
   }
 

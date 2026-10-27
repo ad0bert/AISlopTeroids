@@ -41,6 +41,8 @@ final class WorldView {
   private final Map<Entity, List<Entity>> attached = new IdentityHashMap<>();
   private final Random random = new Random(11L);
   private final Vector3f viewer = new Vector3f();
+  /** The arena's half-size, from the world last synced. */
+  private float arena = new astroids.model.Tuning().arena;
   private final Vector3f tmp = new Vector3f();
   private final Quaternionf turn = new Quaternionf();
   private static final Vector3f FORWARD = new Vector3f(0f, 0f, 1f);
@@ -54,6 +56,7 @@ final class WorldView {
   /** Moves the entities to the model's state, as seen from {@code viewer}. Call after every world step. */
   void sync(World world, Vector3f viewerPosition, float dt) {
     this.viewer.set(viewerPosition);
+    this.arena = world.arena();
     this.seen.clear();
     for (Asteroid a : world.asteroids()) {
       final var e = entityFor(a, () -> newAsteroid(a));
@@ -87,7 +90,7 @@ final class WorldView {
 
   /** The point where something at {@code position} is drawn: its copy nearest to the viewer. */
   Vector3f shown(Vector3f position, Vector3f dest) {
-    return World.delta(this.viewer, position, dest).add(this.viewer);
+    return World.delta(this.viewer, position, dest, this.arena).add(this.viewer);
   }
 
   private Entity entityFor(Object model, java.util.function.Supplier<Entity> create) {
@@ -104,7 +107,7 @@ final class WorldView {
   private void place(Entity e, Vector3f position) {
     final var p = e.transform().position();
     final var target = shown(position, this.tmp);
-    final boolean jumped = p.distanceSquared(target) > World.ARENA * World.ARENA;
+    final boolean jumped = p.distanceSquared(target) > this.arena * this.arena;
     p.set(target);
     if (jumped) {
       e.transform().snapshot(); // it came round the far side: no smear across the screen
@@ -147,7 +150,7 @@ final class WorldView {
     return e;
   }
 
-  /** Sounds and debris for what happened in the last step. */
+  /** Sounds and debris for what happened in the last step; call after {@link #sync}. */
   void play(Iterable<GameEvent> events) {
     final var audio = this.engine.audio();
     for (GameEvent event : events) {

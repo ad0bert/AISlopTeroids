@@ -72,6 +72,17 @@ final class TitleState extends LevelState {
       Hud.centered(ui, line, width, y, 1.05f, 0.8f, 0.82f, 0.88f, 1f);
       y += ui.lineHeight(1.05f) + 6f;
     }
+    final var tuning = this.game.tuning();
+    if (tuning.custom()) {
+      final var note = "Custom tuning: " + tuning.overrides() + " value" + (tuning.overrides() == 1 ? "" : "s")
+          + " changed  -  best scores are not recorded";
+      Hud.centered(ui, note, width, height * 0.92f, 1f, 1f, 0.75f, 0.3f, 1f);
+    }
+    if (!tuning.problems().isEmpty()) { // the packaged game has no visible log: say what was wrong here
+      final int more = tuning.problems().size() - 1;
+      final var note = "tuning.properties: " + tuning.problems().get(0) + (more > 0 ? "  (+" + more + " more)" : "");
+      Hud.centered(ui, note, width, height * 0.92f + ui.lineHeight(1f) + 2f, 1f, 1f, 0.45f, 0.35f, 1f);
+    }
     final int best = this.game.highScore();
     if (best > 0) {
       Hud.centered(ui, "Best score  " + best, width, height * 0.88f, 1.2f, 0.95f, 0.85f, 0.45f, 1f);

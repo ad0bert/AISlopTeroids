@@ -36,6 +36,8 @@ final class PlayState extends LevelState {
   private float yaw;
   private float pitch;
   private boolean wasCaptured;
+  /** Played with changed numbers from tuning.properties: labelled, and it sets no best score. */
+  private boolean custom;
   private float time;
 
   private String message = "";
@@ -54,7 +56,8 @@ final class PlayState extends LevelState {
 
   @Override
   protected void build(Engine engine) {
-    this.world = World.newGame(System.nanoTime());
+    this.custom = this.game.loadTuning().custom();
+    this.world = World.newGame(System.nanoTime(), this.game.tuning().tuning());
     this.view = new WorldView(engine, this.game.art());
     this.camera = this.game.art().addBackdrop(engine.scene());
     this.wasCaptured = engine.isMouseCaptured();
@@ -144,30 +147,31 @@ final class PlayState extends LevelState {
   private void afterStep(Engine engine, float dt) {
     final var ship = this.world.ship();
     final var p = this.camera.transform().position();
-    final boolean jumped = p.distanceSquared(ship.position) > World.ARENA * World.ARENA;
+    final boolean jumped = p.distanceSquared(ship.position) > this.world.arena() * this.world.arena();
     p.set(ship.position);
     if (jumped) {
       this.camera.transform().snapshot(); // flew through a wall, or came back in the middle
     }
     final var events = this.world.drainEvents();
-    this.view.play(events);
     this.view.sync(this.world, ship.position, dt);
+    this.view.play(events);
     this.flash = Math.max(0f, this.flash - dt * 1.5f);
     for (GameEvent e : events) {
       switch (e) {
       case GameEvent.WaveStarted w -> say("WAVE " + w.wave(), 2.5f);
       case GameEvent.BossAppeared b -> say("ENEMY SHIP!", 2.5f);
-      case GameEvent.BossDestroyed b -> say("ENEMY SHIP DESTROYED  +" + World.BOSS_SCORE, 2.5f);
+      case GameEvent.BossDestroyed b -> say("ENEMY SHIP DESTROYED  +" + this.world.tuning().scoreEnemyDestroyed,
+          2.5f);
       case GameEvent.BossLeft b -> say("The enemy ship left", 2f);
       case GameEvent.ShipDestroyed s -> {
         this.flash = 0.8f;
         if (this.world.lives() > 0) {
-          say("SHIP LOST", World.RESPAWN_DELAY);
+          say("SHIP LOST", this.world.tuning().respawnDelay);
         }
       }
       case GameEvent.GameOver g -> {
-        final boolean best = this.game.recordScore(g.score());
-        engine.states().push(new GameOverState(this.game, this, g.score(), best));
+        final boolean best = !this.custom && this.game.recordScore(g.score());
+        engine.states().push(new GameOverState(this.game, this, g.score(), best, this.custom));
       }
       default -> {
       }
@@ -200,6 +204,9 @@ final class PlayState extends LevelState {
     if (ship.alive && ship.invulnerable > 0f && ((int) (this.time * 6) % 2 == 0)) {
       Hud.centered(ui, "SHIELD", width, height / 2f + 24f, 1.1f, 0.6f, 1f, 0.8f, 0.9f);
     }
+    if (this.custom) {
+      Hud.text(ui, "CUSTOM TUNING", 16f, 14f + ui.lineHeight(1.6f) + ui.lineHeight(1.1f) + 6f, 1f, 1f, 0.75f, 0.3f, 1f);
+    }
     final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
     Hud.text(ui, speed, 16f, height - ui.lineHeight(1.1f) - 14f, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
 
@@ -209,14 +216,14 @@ final class PlayState extends LevelState {
     if (rocks.size() < MARK_ROCKS_BELOW) {
       final var toRock = new Vector3f();
       for (var rock : rocks) {
-        World.delta(ship.position, rock.position, toRock);
+        this.world.delta(ship.position, rock.position, toRock);
         Hud.marker(ui, width, height, toRock, view, fov, String.format(Locale.ROOT, "ROCK %.0f m", toRock.length()),
             0.85f, 0.85f, 0.9f);
       }
     }
     final var boss = this.world.boss();
     if (boss != null) {
-      final var toBoss = World.delta(ship.position, boss.position, new Vector3f());
+      final var toBoss = this.world.delta(ship.position, boss.position, new Vector3f());
       Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()),
           1f, 0.3f, 0.25f);
     }
