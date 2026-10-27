@@ -23,7 +23,7 @@ public sealed interface GameEvent {
   record BossHit(Vector3f position) implements GameEvent {
   }
 
-  record BossDestroyed(Vector3f position, Boss.Kind kind, int points) implements GameEvent {
+  record BossDestroyed(Vector3f position, Boss.Kind kind, int points, Vector3f velocity) implements GameEvent {
   }
 
   record BossLeft() implements GameEvent {

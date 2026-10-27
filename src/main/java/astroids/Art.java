@@ -31,10 +31,14 @@ final class Art {
   final GpuMesh[] rocks = new GpuMesh[ROCK_SHAPES];
   /** Broken-off chips for the debris of a rock that is hit. */
   final GpuMesh[] chips = new GpuMesh[8];
+  /** Torn-off pieces of hull for the wreckage of an enemy ship. */
+  final GpuMesh[] shards = new GpuMesh[6];
   /** A ball of points: the dust of a rock that is hit, scaled up as it spreads. */
   final GpuMesh dust;
   final GpuMesh ball;
   final GpuMesh cube;
+  /** A smooth ball, for fireballs (seen close up, the facets of {@link #ball} would show). */
+  final GpuMesh smoothBall;
   final GpuMesh stars;
   final GpuMesh brightStars;
 
@@ -106,6 +110,7 @@ final class Art {
     }
     this.ball = res.mesh(MeshFactory.sphere(1f, 10, 6));
     this.cube = res.mesh(MeshFactory.cube(1f));
+    this.smoothBall = res.mesh("gen:smooth-ball", MeshFactory.sphere(1f, 28, 18));
     this.stars = res.mesh(MeshFactory.points(starField(1400, 1L)));
     this.brightStars = res.mesh(MeshFactory.points(starField(250, 2L)));
     this.rockMaterial.specular = 0.05f;
@@ -146,6 +151,21 @@ final class Art {
     settings.clearColor.set(0.005f, 0.006f, 0.02f);
   }
 
+  /** Its own material for one fireball (it changes colour and fades on its own): see-through and glowing. */
+  Material fireballMaterial() {
+    final var m = new Material().color(0.13f, 0.12f, 0.11f, 0.65f).transparent(); // smoke, once the fire has gone
+    m.specular = 0f;
+    m.emissive.set(5f, 3f, 1.5f);
+    return m;
+  }
+
+  /** Its own material for one cloud of smoke: dark, see-through points. */
+  Material smokeMaterial() {
+    final var m = new Material().color(0.16f, 0.15f, 0.14f, 0.75f).unlit().transparent();
+    m.pointSize = 3.5f;
+    return m;
+  }
+
   /** Its own material for one dust cloud (it fades on its own): unlit, see-through rock colour. */
   Material dustMaterial(boolean big) {
     final var m = new Material().color(big ? 0.62f : 0.70f, big ? 0.58f : 0.62f, big ? 0.54f : 0.52f, 0.8f).unlit()
@@ -159,6 +179,22 @@ final class Art {
   private static final float SUN_YAW = -40f;
 
   private void buildShips(engine.resources.ResourceManager res) {
+    // a used look for all hull surfaces: plates, rivets, grime and scratches
+    final var wear = ShipArt.wear(256, 21L);
+    final var wearColour = res.texture("gen:wear-albedo", wear.albedo());
+    final var wearShine = res.texture("gen:wear-metal-rough", wear.metalRough());
+    final var wearBumps = res.texture("gen:wear-normals", wear.normals());
+    for (var m : List.of(this.bossHull, this.bossPaint, this.scoutHull, this.scoutFin)) {
+      m.texture = wearColour;
+      m.metalRoughMap = wearShine;
+      m.normalMap = wearBumps;
+      m.uvScale.set(4f, 1f); // eight plates round the hull
+      m.roughness = Math.min(1f, m.roughness * 1.6f); // the map scales it: 0.55 on clean metal, up to 1 on grime
+    }
+    for (int i = 0; i < this.shards.length; i++) {
+      this.shards[i] = res.mesh("gen:shard-" + i, ShipArt.shard(3000L + i));
+    }
+
     final var saucer = res.mesh("gen:saucer", ShipArt.lathe(ShipArt.SAUCER, 40));
     final var band = res.mesh("gen:rim-band", ShipArt.lathe(ShipArt.RIM_BAND, 40));
     final var dome = res.mesh("gen:dome", ShipArt.lathe(ShipArt.DOME, 28));

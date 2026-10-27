@@ -408,7 +408,7 @@ public final class World {
     final var b = this.boss;
     final int points = b.kind == Boss.Kind.SCOUT ? this.t.scoreScoutDestroyed : this.t.scoreEnemyDestroyed;
     addScore(points);
-    this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position), b.kind, points));
+    this.events.add(new GameEvent.BossDestroyed(new Vector3f(b.position), b.kind, points, new Vector3f(b.velocity)));
     this.boss = null;
     this.bossDelay = enemyWait();
   }

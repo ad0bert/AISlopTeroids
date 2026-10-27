@@ -76,6 +76,49 @@ class ShipArtTest {
   }
 
   @Test
+  void theWearTilesAndVariesTheShine() {
+    final int size = 128;
+    final var wear = ShipArt.wear(size, 21L);
+    assertEquals(size * size * 4, wear.albedo().rgba().length);
+    assertEquals(size * size * 4, wear.normals().rgba().length);
+    int least = 255;
+    int most = 0;
+    for (int i = 0; i < size * size; i++) {
+      final int rough = wear.metalRough().rgba()[i * 4 + 1] & 0xff;
+      least = Math.min(least, rough);
+      most = Math.max(most, rough);
+    }
+    assertTrue(most - least > 80, "polished and dull places: " + least + " to " + most);
+    // the colour wraps round (u round the hull): there is a panel seam at the edge, as in the middle, and across
+    // the edge it looks like across the middle one, not like a cut
+    double edge = 0;
+    double middle = 0;
+    for (int y = 0; y < size; y++) {
+      edge += Math.abs((wear.albedo().rgba()[(y * size) * 4] & 0xff)
+          - (wear.albedo().rgba()[(y * size + size - 1) * 4] & 0xff));
+      middle += Math.abs((wear.albedo().rgba()[(y * size + size / 2) * 4] & 0xff)
+          - (wear.albedo().rgba()[(y * size + size / 2 - 1) * 4] & 0xff));
+    }
+    assertTrue(edge <= middle * 1.5 + size, "no cut where the texture wraps: " + edge + " vs " + middle);
+  }
+
+  @Test
+  void wreckageIsABentJaggedPlateOfAboutUnitSize() {
+    final var m = ShipArt.shard(3000L);
+    float minY = Float.MAX_VALUE;
+    float maxY = -Float.MAX_VALUE;
+    for (int i = 0; i < m.vertexCount(); i++) {
+      final var p = at(m, i, 0);
+      assertTrue(Math.hypot(p.x, p.z) <= 1.01, "within radius 1");
+      assertEquals(1f, at(m, i, 3).length(), 1e-3f);
+      minY = Math.min(minY, p.y);
+      maxY = Math.max(maxY, p.y);
+    }
+    assertTrue(maxY - minY < 0.5f, "a plate, not a lump");
+    assertTrue(maxY - minY > 0.1f, "but a bent one");
+  }
+
+  @Test
   void theEnemyShipsAreAFifthBiggerThanBefore() {
     assertEquals(2.4f, World.BOSS_RADIUS, 1e-6f);
     assertEquals(1.44f, World.SCOUT_RADIUS, 1e-6f);

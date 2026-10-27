@@ -167,13 +167,14 @@ final class WorldView {
       }
       case GameEvent.BossHit h -> {
         sound(this.art.clang, h.position(), 1f, 1f);
-        burst(h.position(), 5, 0.4f, 10f, this.art.fire);
+        sparks(shown(h.position(), new Vector3f()), new Vector3f(), 8, 0.06f, 22f);
+        wreckage(shown(h.position(), new Vector3f()), new Vector3f(), 3, 0.25f, 9f, this.art.bossHull,
+            this.art.bossHull);
       }
       case GameEvent.BossDestroyed d -> {
         final boolean scout = d.kind() == Boss.Kind.SCOUT;
         sound(this.art.bigBoom, d.position(), 1.2f, scout ? 1f : 0.7f);
-        burst(d.position(), scout ? 12 : 18, 0.7f, 16f, this.art.fire);
-        burst(d.position(), scout ? 6 : 10, 0.8f, 10f, scout ? this.art.scoutHull : this.art.bossHull);
+        shipBurst(d.position(), d.velocity(), d.kind());
       }
       case GameEvent.BossAppeared a -> audio.play2D(this.art.alarm, 0.8f, AudioBus.EFFECTS);
       case GameEvent.ShipDestroyed d -> {
@@ -238,6 +239,88 @@ final class WorldView {
       e.transform().scale().set(size);
       e.add(new Debris(this.scene, randomDirection(new Vector3f()).mul(18f + 14f * this.random.nextFloat())
           .add(rockVelocity), new Vector3f(0f, 1f, 0f), 0f, 0.2f + 0.2f * this.random.nextFloat(), size));
+      this.scene.add(e);
+    }
+  }
+
+  /**
+   * An enemy ship blowing up: a flash of light, overlapping fireballs that swell, cool and fade, torn pieces of its
+   * hull (in its own materials) tumbling away with its motion, embers streaking out, and a cloud of smoke.
+   */
+  private void shipBurst(Vector3f position, Vector3f shipVelocity, Boss.Kind kind) {
+    final boolean scout = kind == Boss.Kind.SCOUT;
+    final var at = shown(position, new Vector3f());
+    final float r = kind.radius;
+    final var drift = new Vector3f(shipVelocity).mul(0.3f); // the cloud keeps a little of the ship's motion
+
+    final var flash = new Entity("flash");
+    flash.transform().position().set(at);
+    final var light = Light.point(1f, 0.6f, 0.25f, 8f, r * 25f);
+    light.castShadows = false;
+    flash.add(light);
+    flash.add(new Flash(this.scene, light, 0.7f));
+    this.scene.add(flash);
+
+    // a ragged cluster of puffs of fire, one after another, rather than one ball
+    final int puffs = scout ? 5 : 7;
+    for (int i = 0; i < puffs; i++) {
+      final var ball = new Entity("fireball");
+      final var fire = this.art.fireballMaterial();
+      ball.add(new MeshRenderer(this.art.smoothBall, fire)).castShadows = false;
+      ball.transform().position().set(at).fma(i == 0 ? 0f : r * (0.3f + 0.4f * this.random.nextFloat()),
+          randomDirection(new Vector3f()));
+      ball.transform().scale().set(0f);
+      final float size = r * (i == 0 ? 1.2f : 0.6f + 0.5f * this.random.nextFloat());
+      ball.add(new Blast(this.scene, fire, new Vector3f(drift).fma(2f, randomDirection(new Vector3f())),
+          i == 0 ? 0f : 0.03f + 0.15f * this.random.nextFloat(), size * 0.25f, size,
+          0.6f + 0.5f * this.random.nextFloat()));
+      this.scene.add(ball);
+    }
+
+    final var hull = scout ? this.art.scoutHull : this.art.bossHull;
+    final var trim = scout ? this.art.scoutFin : this.art.bossPaint;
+    wreckage(at, shipVelocity, scout ? 12 : 18, r * 0.32f, 11f, hull, trim);
+    sparks(at, drift, scout ? 18 : 28, 0.09f, 26f);
+
+    final var smoke = new Entity("smoke");
+    final var soot = this.art.smokeMaterial();
+    smoke.add(new MeshRenderer(this.art.dust, soot));
+    smoke.transform().position().set(at);
+    smoke.add(new Dust(this.scene, soot, drift, r * 0.5f, r * 3.2f, 2.6f));
+    this.scene.add(smoke);
+  }
+
+  /** Torn pieces of hull: mostly small, a few large, flung out and tumbling, shrinking away only at the end. */
+  private void wreckage(Vector3f at, Vector3f velocity, int count, float largest, float speed, Material hull,
+      Material trim) {
+    for (int i = 0; i < count; i++) {
+      final var dir = randomDirection(new Vector3f());
+      final float share = 0.2f + 0.8f * (float) Math.pow(this.random.nextFloat(), 2.5);
+      final float size = largest * share;
+      final var e = new Entity("wreckage");
+      e.add(new MeshRenderer(this.art.shards[this.random.nextInt(this.art.shards.length)],
+          this.random.nextFloat() < 0.75f ? hull : trim));
+      e.transform().position().set(at).fma(largest * this.random.nextFloat(), dir);
+      e.transform().rotation().rotationAxis((float) (2 * Math.PI * this.random.nextFloat()),
+          randomDirection(new Vector3f()));
+      e.transform().scale().set(size);
+      e.add(new Debris(this.scene, new Vector3f(dir).mul(speed * (0.5f + this.random.nextFloat()) / (0.4f + share))
+          .add(velocity), randomDirection(new Vector3f()), 2f + 8f * this.random.nextFloat(),
+          1.8f + 1.7f * this.random.nextFloat(), size, 0.3f, 0.1f));
+      this.scene.add(e);
+    }
+  }
+
+  /** Glowing embers streaking out, quick to burn out. */
+  private void sparks(Vector3f at, Vector3f velocity, int count, float size, float speed) {
+    for (int i = 0; i < count; i++) {
+      final var e = new Entity("ember");
+      e.add(new MeshRenderer(this.art.ball, this.art.fire)).castShadows = false;
+      e.transform().position().set(at);
+      final float s = size * (0.5f + this.random.nextFloat());
+      e.transform().scale().set(s);
+      e.add(new Debris(this.scene, randomDirection(new Vector3f()).mul(speed * (0.5f + this.random.nextFloat()))
+          .add(velocity), randomDirection(new Vector3f()), 6f, 0.4f + 0.6f * this.random.nextFloat(), s));
       this.scene.add(e);
     }
   }

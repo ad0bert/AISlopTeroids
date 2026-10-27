@@ -7,7 +7,9 @@ import java.util.Random;
 import org.joml.Vector3f;
 
 import engine.render.HdrImage;
+import engine.render.ImageData;
 import engine.render.MeshData;
+import engine.resources.NormalMaps;
 
 /**
  * The enemy ships' parts, turned on a lathe: a profile (radius and height pairs, from the bottom middle up to the top
@@ -107,6 +109,204 @@ final class ShipArt {
 
   private static boolean same(float[] a, float[] b) {
     return Math.abs(a[0] - b[0]) < 1e-6f && Math.abs(a[1] - b[1]) < 1e-6f;
+  }
+
+  // ----- wear: the hulls are not new
+
+  /** A hull's worn surface: colour (grime, streaks, scratches), roughness and metal (glTF layout), and bumps. */
+  record Wear(ImageData albedo, ImageData metalRough, ImageData normals) {
+  }
+
+  /**
+   * A used look for the hulls, for their lathe coordinates (u round the hull, v along its profile), tiling in both:
+   * plates with grooves between them and rivets along the seams, patches and downward streaks of grime (darker and
+   * duller), and fine scratches (brighter and shinier, as worn metal is).
+   */
+  static Wear wear(int size, long seed) {
+    final var rnd = new Random(seed);
+    final float[] height = new float[size * size];
+    final float[] grime = new float[size * size];
+    final float[] scratch = new float[size * size];
+    java.util.Arrays.fill(height, 0.5f);
+    // plates: two across each tile, seams at a few heights along the profile
+    final int[] across = { 0, size / 2 };
+    final int[] down = { (int) (size * 0.12f), (int) (size * 0.47f), (int) (size * 0.78f) };
+    for (int y = 0; y < size; y++) {
+      for (int x = 0; x < size; x++) {
+        float groove = 0f;
+        for (int sx : across) {
+          groove = Math.max(groove, seam(Math.abs(Math.floorMod(x - sx + size / 2, size) - size / 2)));
+        }
+        for (int sy : down) {
+          groove = Math.max(groove, seam(Math.abs(y - sy)));
+        }
+        height[y * size + x] -= 0.35f * groove;
+      }
+    }
+    // rivets along the seams
+    for (int sx : across) {
+      for (int y = 6; y < size; y += 12) {
+        bump(height, size, sx + 5, y, 1.6f, 0.25f);
+        bump(height, size, sx - 5, y, 1.6f, 0.25f);
+      }
+    }
+    for (int sy : down) {
+      for (int x = 6; x < size; x += 12) {
+        bump(height, size, x, sy + 5, 1.6f, 0.25f);
+      }
+    }
+    // grime: soft patches, and streaks running down the hull
+    final float[] patches = noiseGrid(rnd, 8);
+    final float[] streaks = noiseGrid(rnd, 12);
+    for (int y = 0; y < size; y++) {
+      for (int x = 0; x < size; x++) {
+        final float patch = gridNoise(patches, 8, (float) x * 8 / size, (float) y * 8 / size);
+        final float streak = gridNoise(streaks, 12, (float) x * 12 / size, (float) y * 2 / size);
+        grime[y * size + x] = Math.max(0f, Math.min(1f, (patch - 0.5f) * 1.4f + (streak - 0.65f) * 0.6f));
+      }
+    }
+    // scratches: short thin lines
+    for (int i = 0; i < 70; i++) {
+      float x = rnd.nextFloat() * size;
+      float y = rnd.nextFloat() * size;
+      final double a = 2 * Math.PI * rnd.nextFloat();
+      final int length = 6 + rnd.nextInt(30);
+      for (int k = 0; k < length; k++) {
+        final int o = Math.floorMod((int) y, size) * size + Math.floorMod((int) x, size);
+        scratch[o] = 1f;
+        height[o] -= 0.06f;
+        x += (float) Math.cos(a);
+        y += (float) Math.sin(a);
+      }
+    }
+    final byte[] albedo = new byte[size * size * 4];
+    final byte[] metalRough = new byte[size * size * 4];
+    for (int i = 0; i < size * size; i++) {
+      final float dirt = grime[i];
+      final float shine = scratch[i];
+      final float groove = Math.max(0f, 0.5f - height[i]) * 2f; // dirt gathers in the grooves too
+      final float light = (1f - 0.3f * dirt - 0.3f * groove) * (1f + 0.2f * shine);
+      albedo[i * 4] = toByte(light * (1f - 0.05f * dirt));
+      albedo[i * 4 + 1] = toByte(light * (1f - 0.08f * dirt));
+      albedo[i * 4 + 2] = toByte(light * (1f - 0.14f * dirt));
+      albedo[i * 4 + 3] = (byte) 255;
+      // roughness (green) scales the material's: dull where dirty, polished where scratched
+      final float rough = 0.55f + 0.45f * dirt + 0.3f * groove - 0.35f * shine;
+      metalRough[i * 4] = (byte) 255;
+      metalRough[i * 4 + 1] = toByte(rough);
+      metalRough[i * 4 + 2] = toByte(1f - 0.4f * dirt); // grime is not metal
+      metalRough[i * 4 + 3] = (byte) 255;
+    }
+    return new Wear(new ImageData(size, size, albedo), new ImageData(size, size, metalRough),
+        NormalMaps.fromHeights(height, size, size, 3f));
+  }
+
+  /** How deep a groove is this many texels from its middle. */
+  private static float seam(int distance) {
+    return distance == 0 ? 1f : distance == 1 ? 0.6f : distance == 2 ? 0.15f : 0f;
+  }
+
+  private static void bump(float[] height, int size, int cx, int cy, float radius, float amount) {
+    final int reach = (int) Math.ceil(radius * 2);
+    for (int dy = -reach; dy <= reach; dy++) {
+      for (int dx = -reach; dx <= reach; dx++) {
+        final float t = (float) Math.sqrt(dx * dx + dy * dy) / radius;
+        if (t < 1.5f) {
+          height[Math.floorMod(cy + dy, size) * size + Math.floorMod(cx + dx, size)] += amount
+              * (float) Math.exp(-t * t * 2);
+        }
+      }
+    }
+  }
+
+  private static float[] noiseGrid(Random rnd, int cells) {
+    final float[] g = new float[cells * cells];
+    for (int i = 0; i < g.length; i++) {
+      g[i] = rnd.nextFloat();
+    }
+    return g;
+  }
+
+  /** Smooth value noise on a grid that wraps round in both directions. */
+  private static float gridNoise(float[] grid, int cells, float x, float y) {
+    final int x0 = (int) Math.floor(x);
+    final int y0 = (int) Math.floor(y);
+    final float fx = smooth(x - x0);
+    final float fy = smooth(y - y0);
+    final float a = grid[Math.floorMod(y0, cells) * cells + Math.floorMod(x0, cells)];
+    final float b = grid[Math.floorMod(y0, cells) * cells + Math.floorMod(x0 + 1, cells)];
+    final float c = grid[Math.floorMod(y0 + 1, cells) * cells + Math.floorMod(x0, cells)];
+    final float d = grid[Math.floorMod(y0 + 1, cells) * cells + Math.floorMod(x0 + 1, cells)];
+    return (a + (b - a) * fx) * (1 - fy) + (c + (d - c) * fx) * fy;
+  }
+
+  private static byte toByte(float v) {
+    return (byte) Math.round(Math.max(0f, Math.min(1f, v)) * 255f);
+  }
+
+  // ----- wreckage
+
+  /**
+   * A torn-off piece of hull, about radius 1: an irregular plate with jagged edges, a little thickness, and bent, as a
+   * curved hull panel would be. Flat faces, so its edges catch the light.
+   */
+  static MeshData shard(long seed) {
+    final var rnd = new Random(seed);
+    final int corners = 5 + rnd.nextInt(4);
+    final float[][] rim = new float[corners][];
+    for (int i = 0; i < corners; i++) {
+      final double a = 2 * Math.PI * (i + 0.6 * rnd.nextFloat()) / corners;
+      final float r = 0.45f + 0.55f * rnd.nextFloat();
+      rim[i] = new float[] { (float) Math.cos(a) * r, (float) Math.sin(a) * r * (0.5f + 0.5f * rnd.nextFloat()) };
+    }
+    final float bend = 0.1f + 0.25f * rnd.nextFloat();
+    final float thick = 0.05f;
+    final var top = new Vector3f[corners];
+    final var bottom = new Vector3f[corners];
+    for (int i = 0; i < corners; i++) {
+      final float x = rim[i][0];
+      final float z = rim[i][1];
+      final float y = bend * x * x;
+      top[i] = new Vector3f(x, y + thick, z);
+      bottom[i] = new Vector3f(x, y - thick, z);
+    }
+    final var centreTop = new Vector3f(0f, thick, 0f);
+    final var centreBottom = new Vector3f(0f, -thick, 0f);
+    final List<Vector3f> tris = new ArrayList<>();
+    for (int i = 0; i < corners; i++) {
+      final int j = (i + 1) % corners;
+      tris.addAll(List.of(centreTop, top[j], top[i])); // up
+      tris.addAll(List.of(centreBottom, bottom[i], bottom[j])); // down
+      tris.addAll(List.of(top[i], top[j], bottom[j], top[i], bottom[j], bottom[i])); // the torn edge
+    }
+    final float[] v = new float[tris.size() * MeshData.INPUT_FLOATS_PER_VERTEX];
+    final int[] idx = new int[tris.size()];
+    final var e1 = new Vector3f();
+    final var e2 = new Vector3f();
+    for (int t = 0; t < tris.size(); t += 3) {
+      final var a = tris.get(t);
+      tris.get(t + 1).sub(a, e1);
+      tris.get(t + 2).sub(a, e2);
+      final var n = e1.cross(e2, new Vector3f());
+      if (n.lengthSquared() < 1e-12f) {
+        n.set(0f, 1f, 0f);
+      }
+      n.normalize();
+      for (int k = 0; k < 3; k++) {
+        final var p = tris.get(t + k);
+        final int o = (t + k) * MeshData.INPUT_FLOATS_PER_VERTEX;
+        v[o] = p.x;
+        v[o + 1] = p.y;
+        v[o + 2] = p.z;
+        v[o + 3] = n.x;
+        v[o + 4] = n.y;
+        v[o + 5] = n.z;
+        v[o + 6] = 0.25f + 0.25f * p.x; // a patch of the worn hull surface
+        v[o + 7] = 0.25f + 0.25f * p.z;
+        idx[t + k] = t + k;
+      }
+    }
+    return MeshData.triangles(v, idx);
   }
 
   // ----- the space around everything

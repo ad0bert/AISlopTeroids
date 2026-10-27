@@ -346,7 +346,7 @@ class WorldTest {
     assertNull(w.boss());
     assertEquals(t.scoreScoutDestroyed, w.score());
     assertTrue(w.drainEvents().stream().anyMatch(e -> e instanceof GameEvent.BossDestroyed d
-        && d.kind() == Boss.Kind.SCOUT && d.points() == t.scoreScoutDestroyed));
+        && d.kind() == Boss.Kind.SCOUT && d.points() == t.scoreScoutDestroyed && d.velocity() != null));
   }
 
   @Test
