@@ -72,6 +72,13 @@ opens the options panel at start. Both are handy for screenshots.
 The engine's system properties (`engine.fullscreen`, `engine.vsync`, `engine.screenshot`, ...) work too. CI runs the
 title screen and an autopilot game under Xvfb and keeps the screenshots as an artifact.
 
+## Releases
+
+Push a tag like `v0.1.0` to release that version (`.github/workflows/release.yml`). The workflow builds the game with its
+own Java runtime on Linux, macOS and Windows, plus a runnable jar, and attaches them all to a GitHub release once every
+build has succeeded. The release's title and description come from `release-notes/<tag>.md`; write that file before
+tagging. Actions → release → Run workflow, with a tag, publishes an existing tag again.
+
 ## Code
 
 | | |
