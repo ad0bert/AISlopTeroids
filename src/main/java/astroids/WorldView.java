@@ -52,7 +52,7 @@ final class WorldView {
    */
   static final float CONVERGE = 0.3f;
   /** Where the player's guns are now (in the world), taking turns to fire. */
-  private final Vector3f[] guns = { new Vector3f(), new Vector3f() };
+  private Vector3f[] guns = { new Vector3f() };
   private int nextGun;
   /** How far each of the player's shots was from its gun when it appeared: drawn there, then less and less. */
   private final Map<Bullet, Vector3f> fromGun = new IdentityHashMap<>();
@@ -171,10 +171,18 @@ final class WorldView {
     return e;
   }
 
-  /** Where the player's two guns are now, in the world: shots appear at them. Call before {@link #sync}. */
-  void guns(Vector3f left, Vector3f right) {
-    this.guns[0].set(left);
-    this.guns[1].set(right);
+  /**
+   * Where the player's guns are now, in the world, in the order they take turns: shots appear at them. Call before
+   * {@link #sync}.
+   */
+  void guns(Vector3f... at) {
+    if (this.guns.length != at.length) {
+      this.guns = new Vector3f[at.length];
+      this.nextGun = 0;
+    }
+    for (int i = 0; i < at.length; i++) {
+      this.guns[i] = new Vector3f(at[i]);
+    }
   }
 
   private Entity newBoss(Boss.Kind kind) {

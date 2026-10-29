@@ -88,9 +88,8 @@ final class TitleState extends LevelState {
   }
 
   /** The keys, two columns of key and what it does. */
-  private static final String[][] CONTROLS = { { "Mouse", "look" }, { "W / S", "thrust" }, { "A / D", "slide" },
-      { "Space / Shift", "up / down" }, { "Left click / Ctrl", "fire" }, { "E", "hyperspace" },
-      { "P", "pause" }, { "O", "options" } };
+  private static final String[][] CONTROLS = { { "Mouse", "steer" }, { "W / S", "thrust / brake" },
+      { "Left click / Ctrl", "fire" }, { "E", "hyperspace" }, { "P", "pause" }, { "O", "options" } };
 
   /**
    * The controls as a table (keys in yellow, what they do in white), and two lines about the game below it, on a dark

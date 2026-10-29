@@ -90,8 +90,20 @@ final class Art {
   final List<Part> cockpitParts = new ArrayList<>();
   /** The player's whole ship, for the view from behind it: it points along -z and has a radius of about 1. */
   final List<Part> playerParts = new ArrayList<>();
-  /** Where the player's shots come from: the guns at the wingtips, on the ship (as {@link #playerParts}). */
-  static final Vector3f[] PLAYER_GUNS = { new Vector3f(-1.08f, -0.05f, 0.1f), new Vector3f(1.08f, -0.05f, 0.1f) };
+  /**
+   * The player's four wings, spread in an X: right or left ({@code WING_X}) and upper or lower ({@code WING_Y}), in the
+   * order the guns take turns, from one corner of the X to the opposite one.
+   */
+  static final int[] WING_X = { 1, -1, -1, 1 };
+  static final int[] WING_Y = { 1, -1, 1, -1 };
+  /** How far each wing is tilted up or down from level, and how far out along it the tip is. */
+  static final float WING_DEGREES = 20f;
+  static final float WING_TIP = 1.2f;
+  /** Where the player's shots come from: the muzzles of the guns at the wingtips (on the ship, as {@link #playerParts}). */
+  static final Vector3f[] PLAYER_GUNS = onWings(WING_TIP, -0.5f);
+  /** The end of the player's engine, at the tail, and the steering thrusters at the back of the wingtips. */
+  static final Vector3f PLAYER_ENGINE = new Vector3f(0f, 0f, 1.02f);
+  static final Vector3f[] PLAYER_THRUSTERS = onWings(WING_TIP, 0.62f);
   /**
    * The same guns seen from the cockpit, in camera space: below and ahead, hidden behind the dashboard, so shots rise
    * over it and close in on the crosshair.
@@ -301,32 +313,61 @@ final class Art {
     this.cockpitParts.add(new Part(glass, this.canopyGlass, new Vector3f(), none, one));
   }
 
+  /** The way out along wing {@code i} (see {@link #WING_X}), in the ship's x-y plane. */
+  static Vector3f wingDirection(int i, Vector3f dest) {
+    final double a = Math.toRadians(WING_DEGREES);
+    return dest.set(WING_X[i] * (float) Math.cos(a), WING_Y[i] * (float) Math.sin(a), 0f);
+  }
+
+  /** One point on each wing: {@code out} along it from the ship's middle line, at {@code z}. */
+  private static Vector3f[] onWings(float out, float z) {
+    final var points = new Vector3f[WING_X.length];
+    for (int i = 0; i < points.length; i++) {
+      points[i] = wingDirection(i, new Vector3f()).mul(out);
+      points[i].z = z;
+    }
+    return points;
+  }
+
   /**
-   * The player's ship from outside: a teal fuselage turned on a lathe, a dark glass canopy, swept chrome wings with a
-   * gun at each tip, a tail fin and a glowing engine. It points along -z, about 2 long and 2.3 across.
+   * The player's ship from outside: a long teal fuselage turned on a lathe with a dark glass canopy and a glowing
+   * engine at its tail, and four chrome wings spread in an X behind it, with a gun along each tip and a small steering
+   * thruster at the back of each tip. It points along -z, about 2.2 long and 2.3 across.
    */
   private void buildPlayerShip(engine.resources.ResourceManager res) {
     final var fuselage = res.mesh("gen:fuselage", ShipArt.lathe(ShipArt.FUSELAGE, 32));
     final var ahead = new Quaternionf().rotateX((float) Math.toRadians(-90)); // the lathe's +y to the ship's -z
     final var none = new Quaternionf();
-    this.playerParts.add(new Part(fuselage, this.playerPaint, new Vector3f(0f, 0f, 1f), ahead, new Vector3f(1f)));
-    this.playerParts.add(new Part(this.smoothBall, this.playerDome, new Vector3f(0f, 0.22f, -0.2f), none,
-        new Vector3f(0.19f, 0.16f, 0.42f)));
-    for (int side = -1; side <= 1; side += 2) {
-      // a wing swept back from the fuselage to its tip, and the gun under the tip
-      final var sweep = new Quaternionf().rotateY((float) Math.toRadians(-side * 20));
-      this.playerParts.add(new Part(this.cube, this.playerHull, new Vector3f(side * 0.62f, -0.06f, 0.42f), sweep,
-          new Vector3f(0.48f, 0.025f, 0.24f)));
-      this.playerParts.add(new Part(this.cube, this.playerFrame, new Vector3f(side * 1.08f, -0.05f, 0.36f), none,
-          new Vector3f(0.035f, 0.035f, 0.26f)));
-      this.playerParts.add(new Part(this.ball, this.cockpitLight, new Vector3f(side * 1.08f, -0.05f, 0.64f), none,
-          new Vector3f(0.04f)));
+    this.playerParts.add(new Part(fuselage, this.playerPaint, new Vector3f(0f, 0f, 1f), ahead,
+        new Vector3f(0.68f, 1.05f, 0.68f)));
+    this.playerParts.add(new Part(this.smoothBall, this.playerDome, new Vector3f(0f, 0.17f, -0.15f), none,
+        new Vector3f(0.15f, 0.13f, 0.36f)));
+    this.playerParts.add(new Part(this.smoothBall, this.engineGlow, new Vector3f(PLAYER_ENGINE), none,
+        new Vector3f(0.13f, 0.13f, 0.03f)));
+    final var out = new Vector3f();
+    for (int i = 0; i < WING_X.length; i++) {
+      wingDirection(i, out);
+      final float sx = WING_X[i];
+      final float sy = WING_Y[i];
+      // the wing from inside the fuselage to the tip, turned about the ship's long axis into its corner of the X
+      final var tilt = new Quaternionf().rotateZ((float) Math.toRadians(sx * sy * WING_DEGREES));
+      final float span = WING_TIP - 0.15f;
+      final var middle = new Vector3f(out).mul(0.15f + span / 2f);
+      this.playerParts.add(new Part(this.cube, this.playerHull, new Vector3f(middle.x, middle.y, 0.42f), tilt,
+          new Vector3f(span / 2f, 0.022f, 0.24f)));
+      // a teal stripe along its outer face
+      final var face = new Vector3f(-out.y, out.x, 0f).mul(sx * sy * 0.025f);
+      this.playerParts.add(new Part(this.cube, this.playerPaint,
+          new Vector3f(middle.x + face.x, middle.y + face.y, 0.3f), tilt, new Vector3f(span / 2f - 0.05f, 0.006f,
+              0.05f)));
+      // the gun along the tip, and the steering thruster behind it
+      final var muzzle = PLAYER_GUNS[i];
+      this.playerParts.add(new Part(this.cube, this.playerFrame, new Vector3f(muzzle.x, muzzle.y, 0.05f), none,
+          new Vector3f(0.024f, 0.024f, 0.55f)));
+      final var thruster = PLAYER_THRUSTERS[i];
+      this.playerParts.add(new Part(this.ball, this.cockpitLight, new Vector3f(thruster), none,
+          new Vector3f(0.045f)));
     }
-    final var lean = new Quaternionf().rotateX((float) Math.toRadians(-30)); // its top leans back
-    this.playerParts.add(new Part(this.cube, this.playerPaint, new Vector3f(0f, 0.32f, 0.78f), lean,
-        new Vector3f(0.02f, 0.22f, 0.2f)));
-    this.playerParts.add(new Part(this.smoothBall, this.engineGlow, new Vector3f(0f, 0f, 1.02f), none,
-        new Vector3f(0.14f, 0.14f, 0.03f)));
   }
 
   /** Light that is only added to what is behind it: the readouts on the cockpit's glass. */

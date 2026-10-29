@@ -216,13 +216,16 @@ class WorldTest {
   }
 
   @Test
-  void thrustAcceleratesUpToTheTopSpeedAndTheShipCoastsToAStop() {
+  void thrustAcceleratesUpToTheTopSpeedTheShipCoastsLongAndBrakesToAStop() {
     final var w = empty();
     final var forward = new Controls(new Vector3f(0f, 0f, -1f), new Vector3f(0f, 0f, -1f), false);
     run(w, 3f, forward);
     assertEquals(T.shipMaxSpeed, w.ship().velocity.length(), 0.5f);
-    run(w, 6f, Controls.NONE);
-    assertTrue(w.ship().velocity.length() < 0.5f);
+    run(w, 3f, Controls.NONE);
+    assertTrue(w.ship().velocity.length() > T.shipMaxSpeed * 0.6f, "still going: " + w.ship().velocity.length());
+    final var brake = new Controls(new Vector3f(), new Vector3f(0f, 0f, -1f), false, false, true);
+    run(w, 1.5f, brake);
+    assertEquals(0f, w.ship().velocity.length(), 1e-4f, "stopped, not going backwards");
   }
 
   @Test

@@ -36,7 +36,8 @@ public final class Tuning {
   // the player's ship
   public float shipAcceleration = 30f;
   public float shipMaxSpeed = 25f;
-  public float shipDamping = 0.8f;
+  public float shipDamping = 0.12f;
+  public float shipBrake = 25f;
   public int lives = 3;
   public float respawnDelay = 2f;
   public float shieldTime = 3f;
@@ -115,6 +116,8 @@ public final class Tuning {
         (t, v) -> t.shipMaxSpeed = v.floatValue());
     f("ship.damping", "how fast the ship coasts to a stop without thrust (0 = never)", 0f, t -> t.shipDamping,
         (t, v) -> t.shipDamping = v.floatValue());
+    f("ship.brake", "how fast braking slows the ship, metres per second per second", 0f, t -> t.shipBrake,
+        (t, v) -> t.shipBrake = v.floatValue());
     i("ship.lives", "ships per game", 1, t -> t.lives, (t, v) -> t.lives = v.intValue());
     f("ship.respawnDelay", "seconds until the next ship appears", 0.1f, t -> t.respawnDelay,
         (t, v) -> t.respawnDelay = v.floatValue());
