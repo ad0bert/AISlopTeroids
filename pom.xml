@@ -5,10 +5,10 @@
   <modelVersion>4.0.0</modelVersion>
 
   <groupId>io.github.ad0bert</groupId>
-  <artifactId>simple-astroids</artifactId>
+  <artifactId>ai-slop-teroids</artifactId>
   <version>0.6.0-SNAPSHOT</version>
 
-  <name>SimpleAstroids</name>
+  <name>AISlopTeroids</name>
   <description>A 3D first-person take on the classic Asteroids, built on EngineNamedScratch.</description>
 
   <properties>
@@ -49,7 +49,7 @@
   </dependencies>
 
   <build>
-    <finalName>simple-astroids</finalName>
+    <finalName>ai-slop-teroids</finalName>
     <resources>
       <resource>
         <directory>src/main/resources</directory>
@@ -71,7 +71,7 @@
         <artifactId>maven-surefire-plugin</artifactId>
         <version>3.6.0</version>
       </plugin>
-      <!-- target/dist/simple-astroids.jar runs with `java -jar` and finds its dependencies in target/dist/lib -->
+      <!-- target/dist/ai-slop-teroids.jar runs with `java -jar` and finds its dependencies in target/dist/lib -->
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>
         <artifactId>maven-jar-plugin</artifactId>
@@ -80,7 +80,7 @@
           <outputDirectory>${dist.directory}</outputDirectory>
           <archive>
             <manifest>
-              <mainClass>astroids.Main</mainClass>
+              <mainClass>aislopteroids.Main</mainClass>
               <addClasspath>true</addClasspath>
               <classpathPrefix>lib/</classpathPrefix>
             </manifest>
@@ -148,7 +148,7 @@
                     <argument>--type</argument>
                     <argument>${jpackage.type}</argument>
                     <argument>--name</argument>
-                    <argument>SimpleAstroids</argument>
+                    <argument>AISlopTeroids</argument>
                     <argument>--app-version</argument>
                     <argument>${jpackage.version}</argument>
                     <argument>--vendor</argument>
@@ -156,9 +156,9 @@
                     <argument>--input</argument>
                     <argument>${dist.directory}</argument>
                     <argument>--main-jar</argument>
-                    <argument>simple-astroids.jar</argument>
+                    <argument>ai-slop-teroids.jar</argument>
                     <argument>--main-class</argument>
-                    <argument>astroids.Main</argument>
+                    <argument>aislopteroids.Main</argument>
                     <argument>--add-modules</argument>
                     <argument>${jpackage.modules}</argument>
                     <argument>--java-options</argument>
