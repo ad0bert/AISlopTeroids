@@ -21,9 +21,9 @@ import engine.render.MeshRenderer;
 import engine.render.UiCanvas;
 
 /**
- * A game in progress: the player's ship is the camera. Mouse (or right stick) looks, W/S thrust along the view, A/D
- * slide, Space/Shift rise and sink, click or Ctrl fires, E jumps through hyperspace. The ship keeps drifting after
- * letting go of thrust, as in the original.
+ * A game in progress: the player's ship is the camera. Mouse (or right stick) steers, the ship turning after it with
+ * some inertia; W thrusts ahead along where it points and S brakes, click or Ctrl fires, E jumps through hyperspace.
+ * The ship keeps drifting after letting go of thrust, as in the original.
  *
  * <p>
  * {@code -Dastroids.autopilot=true} flies by itself (turning and firing), for screenshots and smoke tests.
@@ -38,8 +38,7 @@ final class PlayState extends LevelState {
   private World world;
   private WorldView view;
   private Entity camera;
-  private float yaw;
-  private float pitch;
+  private final Turning turn = new Turning();
   private boolean wasCaptured;
   /** Played with changed numbers from tuning.properties: labelled, and it sets no best score. */
   private boolean custom;
@@ -83,8 +82,6 @@ final class PlayState extends LevelState {
   private AudioSource danger;
 
   private final Vector3f forward = new Vector3f();
-  private final Vector3f right = new Vector3f();
-  private final Vector3f up = new Vector3f();
   private final Vector3f thrust = new Vector3f();
   private final Vector2f stick = new Vector2f();
 
@@ -151,18 +148,17 @@ final class PlayState extends LevelState {
       say(options.view.label.toUpperCase(Locale.ROOT), 1.2f);
     }
 
+    // the engine pushes only ahead, along where the ship points (no sliding, rising or sinking); back brakes
     this.aim.transform(this.forward.set(0f, 0f, -1f));
-    this.aim.transform(this.right.set(1f, 0f, 0f));
-    this.up.set(this.right).cross(this.forward);
-    this.thrust.zero();
-    axis(input, "forward", "back", this.forward);
-    axis(input, "right", "left", this.right);
-    axis(input, "up", "down", this.up);
+    float push = input.isActionDown("forward") ? 1f : 0f;
+    boolean brake = input.isActionDown("back");
     final var pad = input.firstGamepad();
     if (pad != null) {
-      final var move = pad.leftStick(this.stick);
-      this.thrust.fma(move.y, this.forward).fma(move.x, this.right);
+      final float y = pad.leftStick(this.stick).y;
+      push += Math.max(0f, y);
+      brake |= y < -0.5f;
     }
+    this.thrust.set(this.forward).mul(Math.min(1f, push));
     boolean fire = input.isActionDown("fire") || (engine.isMouseCaptured()
         && input.isMouseDown(InputState.BUTTON_LEFT));
     boolean jump = input.wasActionPressed("hyperspace");
@@ -171,7 +167,7 @@ final class PlayState extends LevelState {
       fire = true;
       jump = this.time > 4f && this.world.ship().hyperspaceCooldown <= 0f; // shows the jump in smoke runs
     }
-    this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire, jump));
+    this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire, jump, brake));
     afterStep(engine, dt);
 
     if (!this.world.isGameOver()) {
@@ -190,32 +186,27 @@ final class PlayState extends LevelState {
     afterStep(engine, dt);
   }
 
+  /** The mouse and stick turn where the player wants to look; the ship turns after it, with inertia. */
   private void look(Engine engine, float dt) {
     final var input = engine.input();
     final var options = this.game.options();
-    this.yaw += options.yawFor(input.consumeMouseDx());
-    this.pitch += options.pitchFor(input.consumeMouseDy());
+    final var turn = this.turn;
+    turn.look(options.yawFor(input.consumeMouseDx()), options.pitchFor(input.consumeMouseDy()));
     final var pad = input.firstGamepad();
     if (pad != null) {
       final var look = pad.rightStick(this.stick);
-      this.yaw -= look.x * STICK_DEGREES_PER_SECOND * dt;
-      this.pitch += (options.invertY ? -look.y : look.y) * STICK_DEGREES_PER_SECOND * dt;
+      turn.look(-look.x * STICK_DEGREES_PER_SECOND * dt,
+          (options.invertY ? -look.y : look.y) * STICK_DEGREES_PER_SECOND * dt);
     }
     if (this.autopilot) {
-      this.yaw += 25f * dt;
-      this.pitch = 12f * (float) Math.sin(this.time * 0.7f);
+      // in steps, so the steering thrusters show in screenshots
+      if ((int) (this.time / 0.8f) != (int) ((this.time - dt) / 0.8f)) {
+        turn.targetYaw += 20f;
+      }
+      turn.targetPitch = 12f * (float) Math.sin(this.time * 0.7f);
     }
-    this.pitch = Math.max(-85f, Math.min(85f, this.pitch));
-    this.aim.identity().rotateY((float) Math.toRadians(this.yaw)).rotateX((float) Math.toRadians(this.pitch));
-  }
-
-  private void axis(InputState input, String plus, String minus, Vector3f direction) {
-    if (input.isActionDown(plus)) {
-      this.thrust.add(direction);
-    }
-    if (input.isActionDown(minus)) {
-      this.thrust.sub(direction);
-    }
+    turn.step(dt);
+    this.aim.identity().rotateY((float) Math.toRadians(turn.yaw)).rotateX((float) Math.toRadians(turn.pitch));
   }
 
   /** Brings the view up to date with the world and reacts to what happened. */
@@ -267,20 +258,17 @@ final class PlayState extends LevelState {
     }
     this.cockpit.transform().scale().set(ship.alive && shown == View.COCKPIT ? 1f : 0f);
     shipTurn.scale().set(ship.alive && !shown.firstPerson() ? PLAYER_SCALE : 0f);
-    this.exhaust.show(this.thrust.dot(this.forward), ship.alive && !shown.firstPerson(), this.game.art().quality, dt);
+    this.exhaust.show(this.thrust.dot(this.forward), this.turn.yawSpeed, this.turn.pitchSpeed,
+        ship.alive && !shown.firstPerson(), this.game.art().quality, dt);
     final var tuning = this.world.tuning();
     this.glass.show(ship.velocity.length(), tuning.shipMaxSpeed,
         1f - ship.hyperspaceCooldown / Math.max(1e-3f, tuning.hyperspaceCooldown), this.time);
-    final var left = new Vector3f();
-    final var right = new Vector3f();
-    if (shown.firstPerson()) {
-      view.rotation().transform(left.set(Art.COCKPIT_GUNS[0])).add(p);
-      view.rotation().transform(right.set(Art.COCKPIT_GUNS[1])).add(p);
-    } else {
-      this.aim.transform(left.set(Art.PLAYER_GUNS[0]).mul(PLAYER_SCALE)).add(ship.position);
-      this.aim.transform(right.set(Art.PLAYER_GUNS[1]).mul(PLAYER_SCALE)).add(ship.position);
+    final var guns = new Vector3f[shown.firstPerson() ? Art.COCKPIT_GUNS.length : Art.PLAYER_GUNS.length];
+    for (int i = 0; i < guns.length; i++) {
+      guns[i] = shown.firstPerson() ? view.rotation().transform(new Vector3f(Art.COCKPIT_GUNS[i])).add(p)
+          : this.aim.transform(new Vector3f(Art.PLAYER_GUNS[i]).mul(PLAYER_SCALE)).add(ship.position);
     }
-    this.view.guns(left, right);
+    this.view.guns(guns);
     this.view.sync(this.world, new Vector3f(p), dt);
     this.view.play(events);
     this.flash = Math.max(0f, this.flash - dt * 1.5f);

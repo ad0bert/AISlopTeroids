@@ -190,6 +190,10 @@ public final class World {
     if (thrust > 0f) {
       s.velocity.fma(this.t.shipAcceleration * dt * thrust / c.thrust().length(), c.thrust());
     }
+    if (c.brake()) {
+      final float speed = s.velocity.length();
+      s.velocity.mul(Math.max(0f, speed - this.t.shipBrake * dt) / Math.max(1e-6f, speed));
+    }
     s.velocity.mul((float) Math.exp(-this.t.shipDamping * dt));
     if (s.velocity.length() > this.t.shipMaxSpeed) {
       s.velocity.normalize(this.t.shipMaxSpeed);

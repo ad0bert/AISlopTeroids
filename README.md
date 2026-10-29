@@ -14,10 +14,8 @@ has no asset files.
 
 | Control | Keyboard and mouse | Gamepad |
 |---|---|---|
-| Look | mouse | right stick |
-| Thrust forward / back | `W` / `S` (or arrows) | left stick |
-| Slide left / right | `A` / `D` | left stick |
-| Rise / sink | `Space` / `Shift` | |
+| Steer | mouse | right stick |
+| Thrust / brake | `W` / `S` (or arrows up / down) | left stick up / down |
 | Fire | left click or `Ctrl` (hold for rapid fire) | `RB`, `RT` or `A` |
 | Hyperspace | `E` | `B` or `LB` |
 | View (cockpit, no cockpit, behind the ship) | `V` | `Y` |
@@ -29,7 +27,9 @@ has no asset files.
 | Fullscreen | `F11` | |
 | Debug text | `F3` | |
 
-The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
+The ship's engine pushes only ahead, so to fly somewhere you turn the ship towards it. Once up to speed it keeps
+drifting for a long while when you let go of thrust; brake with `S` to stop. The ship turns after the mouse with a
+little inertia.
 
 The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, ambience volume, fullscreen,
 vsync, graphics quality, the radar and the view. Changes take effect at once and are saved in your user config
@@ -43,8 +43,10 @@ There are three views; `V` switches between them in the game:
   above the dashboard, with a dashed ring round the crosshair. Your shots rise from the guns below the dashboard and
   close in on the crosshair.
 - **No cockpit:** the same seat with a clear view; speed and hyperspace are at the bottom left.
-- **Behind the ship:** you see your whole ship (teal, with swept chrome wings) and its shots leave the guns at its
-  wingtips. The crosshair is where the shots go.
+- **Behind the ship:** you see your whole ship: a long teal fuselage with an engine at its tail that flames while you
+  thrust, four chrome wings spread in an X, and a steering thruster at each wingtip that puffs gas while the ship
+  turns (the left wing's turning right, the lower ones turning up). Its shots leave the guns at the four wingtips in
+  turn. The crosshair is where the shots go.
 
 When your ship is hit, the view pulls back and you watch it break up; the next ship brings you back to your view.
 

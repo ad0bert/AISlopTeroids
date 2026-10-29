@@ -32,7 +32,7 @@ public final class AstroidsGame implements Game {
   public void init(Engine engine) {
     this.art = new Art(engine);
     final var input = engine.input();
-    // movement uses the engine's defaults: WASD / arrows, Space up, Shift down (and the gamepad's sticks)
+    // thrust uses the engine's defaults for forward and back: W / S and the up and down arrows (and the left stick)
     input.bind("fire", KeyEvent.VK_CONTROL, KeyEvent.VK_F);
     input.bindGamepad("fire", Gamepad.BUTTON_RIGHT_BUMPER, Gamepad.BUTTON_A);
     input.bindGamepadAxis("fire", Gamepad.AXIS_RIGHT_TRIGGER, 0.5f);
