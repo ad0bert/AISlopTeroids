@@ -84,6 +84,21 @@ final class Hud {
     ui.drawRect(cx - 1f, cy + 3f, 2f, 7f, 0.6f, 1f, 0.8f, 0.85f);
   }
 
+  /**
+   * Where a point in front of the camera (in camera space, looking along -z) is on the screen: x and y in pixels, or
+   * null when it is not in front.
+   */
+  static float[] project(Vector3f local, int width, int height, float fovDegrees) {
+    if (local.z >= -1e-4f) {
+      return null;
+    }
+    final float tanHalf = (float) Math.tan(Math.toRadians(fovDegrees) / 2);
+    final float aspect = (float) width / height;
+    final float nx = local.x / -local.z / (tanHalf * aspect);
+    final float ny = local.y / -local.z / tanHalf;
+    return new float[] { (nx * 0.5f + 0.5f) * width, (0.5f - ny * 0.5f) * height };
+  }
+
   /** Width of a score table column at scale 1 (in a window {@link #BASE_HEIGHT} high): rank, name, score, wave. */
   private static final float TABLE_WIDTH = 330f;
 

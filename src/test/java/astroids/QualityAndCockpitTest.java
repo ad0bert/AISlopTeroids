@@ -41,19 +41,30 @@ class QualityAndCockpitTest {
   }
 
   @Test
-  void qualityAndTheCockpitAreSavedWithTheOptions() throws Exception {
+  void qualityAndTheViewAreSavedWithTheOptions() throws Exception {
     final var file = this.dir.resolve("settings.properties");
     final var first = Options.load(Settings.load(file), false, true);
     assertEquals(Quality.HIGH, first.quality, "high by default");
-    assertTrue(first.cockpit);
+    assertEquals(View.COCKPIT, first.view, "the cockpit by default");
     first.quality = Quality.LOW;
-    first.cockpit = false;
+    first.view = View.CHASE;
     final var settings = Settings.load(file);
     first.store(settings);
     settings.save();
     final var again = Options.load(Settings.load(file), false, true);
     assertEquals(Quality.LOW, again.quality);
-    assertFalse(again.cockpit);
+    assertEquals(View.CHASE, again.view);
+  }
+
+  @Test
+  void theCockpitSwitchedOffBeforeTheViewsBecomesNoCockpit() throws Exception {
+    final var settings = Settings.load(this.dir.resolve("old.properties"));
+    settings.set("hud.cockpit", false);
+    assertEquals(View.CLEAR, Options.load(settings, false, true).view);
+    assertEquals(View.CHASE, View.CLEAR.next());
+    assertEquals(View.COCKPIT, View.CHASE.next(), "round from the last to the first");
+    assertEquals(View.COCKPIT, View.parse("nonsense", View.COCKPIT));
+    assertFalse(View.CHASE.firstPerson());
   }
 
   @Test

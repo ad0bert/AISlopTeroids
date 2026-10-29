@@ -67,6 +67,17 @@ final class Art {
   final Material whiteLight = glowing(2.4f, 2.4f, 2.3f);
   final Material engineGlow = glowing(2.4f, 0.8f, 0.25f);
   final Material cockpitLight = glowing(0.6f, 1.6f, 1.2f);
+  // the cockpit: a dark dashboard, teal lines glowing along the frame (the HUD's colour), and a bubble of clear glass
+  // that reflects the space around it, more towards its edges
+  final Material dashMaterial = new Material().color(0.07f, 0.08f, 0.09f, 1f).pbr(0.3f, 0.55f);
+  final Material holoLine = glowing(0.15f, 0.75f, 0.6f);
+  final Material canopyGlass = new Material().color(0.02f, 0.05f, 0.05f, 1f).pbr(0f, 0.03f).glass(0.035f);
+  // the readouts on the glass: light added to the view (lit, the faint ghost of what is unlit, and the jump's bar)
+  final Material holoOn = holo(0.25f, 1.3f, 1.0f);
+  final Material holoGhost = holo(0.02f, 0.09f, 0.07f);
+  final Material holoJump = holo(0.3f, 1.1f, 1.3f);
+  // the player's ship from outside (seen from behind it): its glass is glossy and dark, like the enemies' domes
+  final Material playerDome = glass(0.04f, 0.16f, 0.15f, 0.02f, 0.09f, 0.08f);
 
   /** One piece of a ship: where it sits on the ship (which has a scale of its radius), and how it looks. */
   record Part(GpuMesh mesh, Material material, Vector3f position, Quaternionf rotation, Vector3f scale) {
@@ -75,8 +86,17 @@ final class Art {
   /** The big enemy ship and the scout, as parts. */
   final List<Part> bossParts = new ArrayList<>();
   final List<Part> scoutParts = new ArrayList<>();
-  /** The player's ship as seen from inside, in camera space (the camera looks along -z): nose, dashboard, struts. */
+  /** The player's ship as seen from inside, in camera space (the camera looks along -z): dashboard, frame, glass. */
   final List<Part> cockpitParts = new ArrayList<>();
+  /** The player's whole ship, for the view from behind it: it points along -z and has a radius of about 1. */
+  final List<Part> playerParts = new ArrayList<>();
+  /** Where the player's shots come from: the guns at the wingtips, on the ship (as {@link #playerParts}). */
+  static final Vector3f[] PLAYER_GUNS = { new Vector3f(-1.08f, -0.05f, 0.1f), new Vector3f(1.08f, -0.05f, 0.1f) };
+  /**
+   * The same guns seen from the cockpit, in camera space: below and ahead, hidden behind the dashboard, so shots rise
+   * over it and close in on the crosshair.
+   */
+  static final Vector3f[] COCKPIT_GUNS = { new Vector3f(-0.45f, -1.05f, -1.8f), new Vector3f(0.45f, -1.05f, -1.8f) };
   /** The graphics quality in force (set with the options): how much the bursts make. */
   Quality quality = Quality.HIGH;
   final Material fire = glowing(2.4f, 1.1f, 0.2f);
@@ -240,6 +260,7 @@ final class Art {
       this.scoutParts.add(new Part(this.cube, this.scoutFin, at, turn, new Vector3f(0.34f, 0.03f, 0.1f)));
     }
     buildCockpit(res);
+    buildPlayerShip(res);
     for (int i = 0; i < 6; i++) {
       final double a = 2 * Math.PI * (i + 0.5) / 6;
       this.scoutParts.add(new Part(this.ball, this.scoutLight,
@@ -248,32 +269,72 @@ final class Art {
   }
 
   /**
-   * The cockpit, in camera space: the nose of the ship pointing ahead below the crosshair, the edge of the dashboard
-   * across the bottom of the view with a few lights, and the canopy's struts at the sides.
+   * The cockpit, in camera space ({@link CockpitArt}): a bubble of glass over the pilot, the arch of its frame across
+   * the view and a low dashboard round the bottom, dark, with thin teal lines glowing along their edges like the HUD.
    */
   private void buildCockpit(engine.resources.ResourceManager res) {
-    final var nose = res.mesh("gen:nose", ShipArt.lathe(ShipArt.NOSE, 32));
-    final var ahead = new Quaternionf().rotateX((float) Math.toRadians(-90)); // the lathe's +y to the view's -z
-    this.cockpitParts.add(new Part(nose, this.playerPaint, new Vector3f(0f, -0.66f, -0.8f),
-        new Quaternionf(ahead).rotateX((float) Math.toRadians(-3)), new Vector3f(0.75f, 0.85f, 0.4f)));
-    // the dashboard: a wide panel along the bottom edge, its near edge tilted up towards the pilot (a cube's
-    // scale is half its size)
-    final var tilt = new Quaternionf().rotateX((float) Math.toRadians(-14));
-    this.cockpitParts.add(new Part(this.cube, this.playerFrame, new Vector3f(0f, -0.5f, -0.62f), tilt,
-        new Vector3f(1.3f, 0.03f, 0.2f)));
-    this.cockpitParts.add(new Part(this.cube, this.playerPaint, new Vector3f(0f, -0.455f, -0.48f), tilt,
-        new Vector3f(1.3f, 0.012f, 0.012f)));
+    final var none = new Quaternionf();
+    final var one = new Vector3f(1f);
+    final var dash = res.mesh("gen:dashboard", CockpitArt.dashboard(64));
+    this.cockpitParts.add(new Part(dash, this.dashMaterial, new Vector3f(), none, one));
+    // the sill's edge, and a line along the shelf just inside it
+    final var sill = res.mesh("gen:sill", CockpitArt.tube(CockpitArt.sillLine(64, 0.004f, 0f), 0.012f, 8));
+    this.cockpitParts.add(new Part(sill, this.playerFrame, new Vector3f(), none, one));
+    final var sillGlow = res.mesh("gen:sill-glow", CockpitArt.tube(CockpitArt.sillLine(64, 0.0f, 0.03f), 0.0035f, 6));
+    this.cockpitParts.add(new Part(sillGlow, this.holoLine, new Vector3f(), none, one));
+    // the arch, with a glowing line along the side that faces the pilot
+    final var arch = res.mesh("gen:arch", CockpitArt.tube(CockpitArt.arch(48, 0.015f), 0.015f, 10));
+    this.cockpitParts.add(new Part(arch, this.playerFrame, new Vector3f(), none, one));
+    final var archGlow = res.mesh("gen:arch-glow", CockpitArt.tube(CockpitArt.arch(48, 0.032f), 0.0025f, 6));
+    this.cockpitParts.add(new Part(archGlow, this.holoLine, new Vector3f(), none, one));
+    // a few lights on the dashboard, either side of the middle
     for (int i = 0; i < 4; i++) {
-      final float x = (i < 2 ? -1 : 1) * (0.42f + 0.1f * (i % 2));
-      this.cockpitParts.add(new Part(this.cube, i % 2 == 0 ? this.cockpitLight : this.whiteLight,
-          new Vector3f(x, -0.465f, -0.56f), tilt, new Vector3f(0.025f, 0.008f, 0.015f)));
+      final float deg = (i < 2 ? -1 : 1) * (14f + 5f * (i % 2));
+      final var at = CockpitArt.sill(deg, 0f);
+      final var axis = new Vector3f(CockpitArt.CENTER.x, at.y, CockpitArt.CENTER.z);
+      at.sub(axis).mul(0.86f).add(axis).add(0f, -0.012f, 0f);
+      this.cockpitParts.add(new Part(this.cube, i % 2 == 0 ? this.cockpitLight : this.whiteLight, at,
+          new Quaternionf().rotateY((float) Math.toRadians(-deg)), new Vector3f(0.022f, 0.004f, 0.012f)));
     }
-    // the canopy's struts: thin, at the sides, leaning in
+    // last, so it is drawn over the rest when transparency is sorted
+    final var glass = res.mesh("gen:canopy", CockpitArt.canopy(64, 20));
+    this.cockpitParts.add(new Part(glass, this.canopyGlass, new Vector3f(), none, one));
+  }
+
+  /**
+   * The player's ship from outside: a teal fuselage turned on a lathe, a dark glass canopy, swept chrome wings with a
+   * gun at each tip, a tail fin and a glowing engine. It points along -z, about 2 long and 2.3 across.
+   */
+  private void buildPlayerShip(engine.resources.ResourceManager res) {
+    final var fuselage = res.mesh("gen:fuselage", ShipArt.lathe(ShipArt.FUSELAGE, 32));
+    final var ahead = new Quaternionf().rotateX((float) Math.toRadians(-90)); // the lathe's +y to the ship's -z
+    final var none = new Quaternionf();
+    this.playerParts.add(new Part(fuselage, this.playerPaint, new Vector3f(0f, 0f, 1f), ahead, new Vector3f(1f)));
+    this.playerParts.add(new Part(this.smoothBall, this.playerDome, new Vector3f(0f, 0.22f, -0.2f), none,
+        new Vector3f(0.19f, 0.16f, 0.42f)));
     for (int side = -1; side <= 1; side += 2) {
-      final var lean = new Quaternionf().rotateZ((float) Math.toRadians(-side * 16));
-      this.cockpitParts.add(new Part(this.cube, this.playerFrame, new Vector3f(side * 1.12f, 0f, -0.85f), lean,
-          new Vector3f(0.025f, 0.8f, 0.025f)));
+      // a wing swept back from the fuselage to its tip, and the gun under the tip
+      final var sweep = new Quaternionf().rotateY((float) Math.toRadians(-side * 20));
+      this.playerParts.add(new Part(this.cube, this.playerHull, new Vector3f(side * 0.62f, -0.06f, 0.42f), sweep,
+          new Vector3f(0.48f, 0.025f, 0.24f)));
+      this.playerParts.add(new Part(this.cube, this.playerFrame, new Vector3f(side * 1.08f, -0.05f, 0.36f), none,
+          new Vector3f(0.035f, 0.035f, 0.26f)));
+      this.playerParts.add(new Part(this.ball, this.cockpitLight, new Vector3f(side * 1.08f, -0.05f, 0.64f), none,
+          new Vector3f(0.04f)));
     }
+    final var lean = new Quaternionf().rotateX((float) Math.toRadians(-30)); // its top leans back
+    this.playerParts.add(new Part(this.cube, this.playerPaint, new Vector3f(0f, 0.32f, 0.78f), lean,
+        new Vector3f(0.02f, 0.22f, 0.2f)));
+    this.playerParts.add(new Part(this.smoothBall, this.engineGlow, new Vector3f(0f, 0f, 1.02f), none,
+        new Vector3f(0.14f, 0.14f, 0.03f)));
+  }
+
+  /** Light that is only added to what is behind it: the readouts on the cockpit's glass. */
+  private static Material holo(float r, float g, float b) {
+    final var m = new Material().color(0f, 0f, 0f, 1f).glass(0.02f);
+    m.emissive.set(r, g, b);
+    m.specular = 0f;
+    return m;
   }
 
   /** Tinted glass that glows from inside and still shows a reflection. */

@@ -43,6 +43,8 @@ public final class AstroidsGame implements Game {
     input.bind("fullscreen", KeyEvent.VK_F11);
     input.bind("options", KeyEvent.VK_O);
     input.bind("hyperspace", KeyEvent.VK_E);
+    input.bind("view", KeyEvent.VK_V); // cockpit, no cockpit, behind the ship
+    input.bindGamepad("view", Gamepad.BUTTON_Y);
     input.bindGamepad("hyperspace", Gamepad.BUTTON_B, Gamepad.BUTTON_LEFT_BUMPER);
     input.bind("previous", KeyEvent.VK_LEFT, KeyEvent.VK_A);
     input.bindGamepad("previous", Gamepad.BUTTON_DPAD_LEFT);

@@ -46,6 +46,17 @@ final class WorldView {
   private final Vector3f tmp = new Vector3f();
   private final Quaternionf turn = new Quaternionf();
   private static final Vector3f FORWARD = new Vector3f(0f, 0f, 1f);
+  /**
+   * Seconds over which a shot drawn at a gun closes in on where the model has it (on the line from the ship's middle,
+   * through the crosshair).
+   */
+  static final float CONVERGE = 0.3f;
+  /** Where the player's guns are now (in the world), taking turns to fire. */
+  private final Vector3f[] guns = { new Vector3f(), new Vector3f() };
+  private int nextGun;
+  /** How far each of the player's shots was from its gun when it appeared: drawn there, then less and less. */
+  private final Map<Bullet, Vector3f> fromGun = new IdentityHashMap<>();
+  private float bulletTime = new astroids.model.Tuning().bulletTime;
 
   WorldView(Engine engine, Art art) {
     this.engine = engine;
@@ -63,10 +74,29 @@ final class WorldView {
       place(e, a.position);
       e.transform().rotation().rotateAxis(a.spinSpeed * dt, a.spinAxis);
     }
+    this.bulletTime = world.tuning().bulletTime;
     for (Bullet b : world.bullets()) {
       final var e = entityFor(b, () -> newBullet(b));
       place(e, b.position);
+      final var offset = this.fromGun.get(b);
+      if (offset != null) {
+        final float fade = 1f - (this.bulletTime - b.timeLeft) / CONVERGE;
+        if (fade <= 0f) {
+          this.fromGun.remove(b);
+          e.transform().rotation().rotationTo(FORWARD, this.tmp.set(b.velocity).normalize());
+          e.transform().scale().set(0.12f, 0.12f, 1.1f);
+        } else {
+          e.transform().position().fma(fade, offset);
+          // thin as it leaves the gun, right under the viewer's nose, and full size where it joins its line
+          final float s = 1f - 0.75f * fade;
+          e.transform().scale().set(0.12f * s, 0.12f * s, 1.1f * s);
+          // heading for its line as well as along it
+          e.transform().rotation().rotationTo(FORWARD,
+              this.tmp.set(offset).mul(-1f / CONVERGE).add(b.velocity).normalize());
+        }
+      }
     }
+    this.fromGun.keySet().retainAll(world.bullets());
     final Boss boss = world.boss();
     if (boss != null) {
       final var e = entityFor(boss, () -> newBoss(boss.kind));
@@ -130,7 +160,21 @@ final class WorldView {
     e.transform().scale().set(b.fromBoss ? 0.35f : 0.12f, b.fromBoss ? 0.35f : 0.12f, b.fromBoss ? 0.7f : 1.1f);
     e.transform().rotation().rotationTo(FORWARD, this.tmp.set(b.velocity).normalize());
     shown(b.position, e.transform().position());
+    if (!b.fromBoss) {
+      // drawn from the gun whose turn it is; the model has it on the line through the crosshair
+      final var gun = this.guns[this.nextGun];
+      this.nextGun = (this.nextGun + 1) % this.guns.length;
+      final float age = this.bulletTime - b.timeLeft;
+      final var offset = new Vector3f(gun).sub(e.transform().position()).fma(age, b.velocity);
+      this.fromGun.put(b, offset);
+    }
     return e;
+  }
+
+  /** Where the player's two guns are now, in the world: shots appear at them. Call before {@link #sync}. */
+  void guns(Vector3f left, Vector3f right) {
+    this.guns[0].set(left);
+    this.guns[1].set(right);
   }
 
   private Entity newBoss(Boss.Kind kind) {

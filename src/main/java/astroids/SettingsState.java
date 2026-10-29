@@ -7,7 +7,7 @@ import engine.ui.Gui;
 
 /**
  * The options panel, opened with O from the title screen or the pause menu: mouse sensitivity, inverted look, volumes,
- * fullscreen, vsync, graphics quality, the radar and the cockpit. Changes take effect at once and are saved when the
+ * fullscreen, vsync, graphics quality, the radar and the view. Changes take effect at once and are saved when the
  * panel closes (Done, or O again).
  */
 final class SettingsState implements GameState {
@@ -91,7 +91,9 @@ final class SettingsState implements GameState {
     }
     g.row(2);
     o.radar = g.checkbox("Show the radar", o.radar);
-    o.cockpit = g.checkbox("Show the cockpit", o.cockpit);
+    if (g.button("View: " + o.view.label)) {
+      o.view = o.view.next();
+    }
     g.space(10f * Hud.zoom());
     g.row(2);
     if (g.button("Defaults")) {

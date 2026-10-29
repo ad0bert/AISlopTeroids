@@ -33,9 +33,9 @@ final class ShipArt {
   /** The scout's hull: flatter, with a sharp edge. */
   static final float[][] SCOUT = { { 0f, -0.17f }, { 0.36f, -0.16f }, { 0.70f, -0.09f }, { 0.96f, -0.02f },
       { 1.06f, 0f }, { 1.06f, 0f }, { 0.95f, 0.04f }, { 0.68f, 0.10f }, { 0.40f, 0.15f }, { 0f, 0.16f } };
-  /** The nose of the player's ship, seen from the cockpit: a cone along +y, from its base up to the tip. */
-  static final float[][] NOSE = { { 0f, 0f }, { 0.24f, 0f }, { 0.24f, 0f }, { 0.23f, 0.12f }, { 0.17f, 0.45f },
-      { 0.08f, 0.75f }, { 0f, 0.86f } };
+  /** The player's fuselage: along +y from its flat tail to the nose. */
+  static final float[][] FUSELAGE = { { 0f, 0f }, { 0.26f, 0f }, { 0.26f, 0f }, { 0.31f, 0.25f }, { 0.32f, 0.8f },
+      { 0.26f, 1.35f }, { 0.15f, 1.8f }, { 0.04f, 2.08f }, { 0f, 2.12f } };
   /** A flat disc, facing down: the glowing engine plate under a hull. */
   static final float[][] PLATE = { { 0f, 0f }, { 1f, 0f } };
 

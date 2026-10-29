@@ -20,6 +20,7 @@ has no asset files.
 | Rise / sink | `Space` / `Shift` | |
 | Fire | left click or `Ctrl` (hold for rapid fire) | `RB`, `RT` or `A` |
 | Hyperspace | `E` | `B` or `LB` |
+| View (cockpit, no cockpit, behind the ship) | `V` | `Y` |
 | Pause | `P` (or `Esc` to free the mouse) | `Start` |
 | Quit to the title screen | `Q` in the pause menu or after the game | `Back` |
 | Quit the game | `Q` or `Esc` on the title screen | `Back` on the title screen |
@@ -31,12 +32,21 @@ has no asset files.
 The ship keeps drifting when you let go of thrust and slowly coasts to a stop.
 
 The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, ambience volume, fullscreen,
-vsync, graphics quality, the radar and the cockpit. Changes take effect at once and are saved in your user config
+vsync, graphics quality, the radar and the view. Changes take effect at once and are saved in your user config
 directory.
 
-You look out of your ship's cockpit: its nose below the crosshair, the dashboard along the bottom, the canopy's struts
-at the sides (switch it off in the options for a clear view). When your ship is hit, the view pulls back and you watch
-it break up; the next ship brings you back into the cockpit.
+There are three views; `V` switches between them in the game:
+
+- **Cockpit:** you look out through a bubble of clear glass that catches the light towards its edges, with a low
+  dashboard round the bottom and the frame's arch across the top corners, thin teal lines glowing along them. Your
+  speed (digits over a bar) and the hyperspace charge (a bar that pulses when the jump is ready) are lit on the glass
+  above the dashboard, with a dashed ring round the crosshair. Your shots rise from the guns below the dashboard and
+  close in on the crosshair.
+- **No cockpit:** the same seat with a clear view; speed and hyperspace are at the bottom left.
+- **Behind the ship:** you see your whole ship (teal, with swept chrome wings) and its shots leave the guns at its
+  wingtips. The crosshair is where the shots go.
+
+When your ship is hit, the view pulls back and you watch it break up; the next ship brings you back to your view.
 
 Graphics quality (Low, Medium, High) is for slower computers: Medium blends see-through things more simply and makes
 fewer pieces, specks and sparks in explosions; Low also turns off the glow (bloom), edge smoothing and the light of
@@ -100,9 +110,9 @@ You need JDK 25 and Maven. The game depends on the engine, `io.github.ad0bert:en
 **Build the engine yourself (no credentials needed).** This is what CI does:
 
 ```bash
-git clone --branch v0.8.3 https://github.com/ad0bert/EngineNamedScratch.git
+git clone --branch v0.8.4 https://github.com/ad0bert/EngineNamedScratch.git
 cd EngineNamedScratch
-mvn -q versions:set -DnewVersion=0.8.3 -DgenerateBackupPoms=false
+mvn -q versions:set -DnewVersion=0.8.4 -DgenerateBackupPoms=false
 mvn -q install -DskipTests -pl engine -am
 ```
 
@@ -118,7 +128,8 @@ mvn package -Pjpackage                   # also target/jpackage: the game with i
 ```
 
 `-Dastroids.autopilot=true` starts straight in a game that flies and shoots by itself, and `-Dastroids.showOptions=true`
-opens the options panel at start. Both are handy for screenshots.
+opens the options panel at start. `-Dastroids.view=COCKPIT`, `CLEAR` or `CHASE` starts the game in that view. All are
+handy for screenshots.
 The engine's system properties (`engine.fullscreen`, `engine.vsync`, `engine.screenshot`, ...) work too. CI runs the
 title screen and an autopilot game under Xvfb and keeps the screenshots as an artifact.
 
@@ -137,9 +148,11 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. `GameOverState` takes the name for the score table. |
 | `RockArt` | The rocks' shapes (a sphere pushed in and out by random lumps and craters, one per seed) and their surface: a seamless height field turned into a colour texture and a bump map. Also the sharp-edged chips and the dust cloud a rock breaks into (`Debris`, `Dust`). |
-| `ShipArt` | The enemy ships' parts, turned on a lathe from profiles (hulls, rim band, domes, engine plate), and the space around everything as a sky image (a sun, a planet's blue shine, a faint nebula) for the polished hulls to reflect. Also the hulls' wear (plates, rivets, grime, scratches) and the torn pieces of hull a ship blows up into (with `Blast` for its fire and `Flash` for its light). |
+| `ShipArt` | The ships' parts, turned on a lathe from profiles (the enemies' hulls, rim band, domes, engine plate, the player's fuselage), and the space around everything as a sky image (a sun, a planet's blue shine, a faint nebula) for the polished hulls to reflect. Also the hulls' wear (plates, rivets, grime, scratches) and the torn pieces of hull a ship blows up into (with `Blast` for its fire and `Flash` for its light). |
+| `CockpitArt`, `GlassDisplay` | The cockpit seen from inside: the glass canopy (an ellipsoid), the arch of its frame, the dashboard and the glowing lines along them; and the readouts lit on its glass (seven-segment speed, the hyperspace bar, the ring round the crosshair). |
 | `Art`, `Sounds` | Meshes, materials and synthesized sounds (effects and seamless ambience loops), made once at start-up. |
 | `Hud`, `Radar` | Text, crosshair, on-screen markers for the enemy ship and the last rocks, score tables, and the radar. |
 | `HighScores` | The ten best games of each difficulty, kept in the scores file. |
 | `Quality` | The graphics quality levels: what each switches in the renderer, and how much of the bursts it keeps. |
+| `View` | The three views: the cockpit, no cockpit, and behind the ship. |
 | `Options`, `SettingsState` | The player's options (saved with the engine's `Settings`) and the panel that edits them (engine `Gui`). |
