@@ -88,43 +88,44 @@ final class GameOverState implements GameState {
 
   @Override
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
+    Hud.screen(width, height);
     Hud.dim(ui, width, height, Math.min(0.55f, this.time * 0.35f));
     float y = height * 0.1f;
     Hud.centered(ui, "GAME OVER", width, y, 3.2f, 1f, 0.35f, 0.3f, 1f);
-    y += ui.lineHeight(3.2f) + 6f;
+    y += Hud.lineHeight(ui, 3.2f) + 6f;
     Hud.centered(ui, "Score  " + this.score + "      wave " + this.wave + "      " + this.difficulty.label, width, y,
         1.6f, 1f, 1f, 1f, 1f);
-    y += ui.lineHeight(1.6f) + 22f;
+    y += Hud.lineHeight(ui, 1.6f) + 22f;
     final float blink = 0.6f + 0.4f * (float) Math.sin(this.time * 4f);
 
     if (this.naming) {
       final int place = this.table.rankFor(this.score) + 1;
       Hud.centered(ui, place == 1 ? "NEW BEST SCORE!" : "A PLACE IN THE TABLE: #" + place, width, y, 2f, 0.95f,
           0.85f, 0.45f, 1f);
-      y += ui.lineHeight(2f) + 16f;
+      y += Hud.lineHeight(ui, 2f) + 16f;
       final var cursor = (this.time * 2f) % 1f < 0.5f ? "_" : " ";
       Hud.centered(ui, "Your name:  " + this.name + cursor, width, y, 1.8f, 1f, 1f, 1f, 1f);
-      y += ui.lineHeight(1.8f) + 14f;
+      y += Hud.lineHeight(ui, 1.8f) + 14f;
       Hud.centered(ui, "Type your name, then Enter (or click) to save it", width, y, 1.1f, 0.8f, 0.8f, 0.85f, blink);
       return;
     }
 
     if (this.custom) {
       Hud.centered(ui, "Custom tuning: this game does not go in the table", width, y, 1.2f, 1f, 0.75f, 0.3f, 1f);
-      y += ui.lineHeight(1.2f) + 10f;
+      y += Hud.lineHeight(ui, 1.2f) + 10f;
     } else if (this.rank == 0) {
       Hud.centered(ui, "New best score!", width, y, 1.6f, 0.95f, 0.85f, 0.45f, 1f);
-      y += ui.lineHeight(1.6f) + 10f;
+      y += Hud.lineHeight(ui, 1.6f) + 10f;
     }
     Hud.centered(ui, "BEST ON " + this.difficulty.label.toUpperCase(java.util.Locale.ROOT), width, y, 1.2f, 0.6f,
         0.85f, 1f, 1f);
-    y += ui.lineHeight(1.2f) + 8f;
+    y += Hud.lineHeight(ui, 1.2f) + 8f;
     if (this.table.entries().isEmpty()) {
       Hud.centered(ui, "No scores yet", width, y, 1.1f, 0.75f, 0.75f, 0.8f, 1f);
-      y += ui.lineHeight(1.1f) + 3f;
+      y += Hud.lineHeight(ui, 1.1f) + 3f;
     } else {
       final float scale = 1.15f;
-      y = Hud.scoreRows(ui, this.table.entries(), 0, HighScores.SIZE, this.rank, (width - Hud.TABLE_WIDTH * scale) / 2f,
+      y = Hud.scoreRows(ui, this.table.entries(), 0, HighScores.SIZE, this.rank, (width - Hud.tableWidth(scale)) / 2f,
           y, scale);
     }
     if (this.time > 1.5f) {

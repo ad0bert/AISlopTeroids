@@ -46,6 +46,17 @@ final class WorldView {
   private final Vector3f tmp = new Vector3f();
   private final Quaternionf turn = new Quaternionf();
   private static final Vector3f FORWARD = new Vector3f(0f, 0f, 1f);
+  /**
+   * Seconds over which a shot drawn at a gun closes in on where the model has it (on the line from the ship's middle,
+   * through the crosshair).
+   */
+  static final float CONVERGE = 0.3f;
+  /** Where the player's guns are now (in the world), taking turns to fire. */
+  private final Vector3f[] guns = { new Vector3f(), new Vector3f() };
+  private int nextGun;
+  /** How far each of the player's shots was from its gun when it appeared: drawn there, then less and less. */
+  private final Map<Bullet, Vector3f> fromGun = new IdentityHashMap<>();
+  private float bulletTime = new astroids.model.Tuning().bulletTime;
 
   WorldView(Engine engine, Art art) {
     this.engine = engine;
@@ -63,10 +74,29 @@ final class WorldView {
       place(e, a.position);
       e.transform().rotation().rotateAxis(a.spinSpeed * dt, a.spinAxis);
     }
+    this.bulletTime = world.tuning().bulletTime;
     for (Bullet b : world.bullets()) {
       final var e = entityFor(b, () -> newBullet(b));
       place(e, b.position);
+      final var offset = this.fromGun.get(b);
+      if (offset != null) {
+        final float fade = 1f - (this.bulletTime - b.timeLeft) / CONVERGE;
+        if (fade <= 0f) {
+          this.fromGun.remove(b);
+          e.transform().rotation().rotationTo(FORWARD, this.tmp.set(b.velocity).normalize());
+          e.transform().scale().set(0.12f, 0.12f, 1.1f);
+        } else {
+          e.transform().position().fma(fade, offset);
+          // thin as it leaves the gun, right under the viewer's nose, and full size where it joins its line
+          final float s = 1f - 0.75f * fade;
+          e.transform().scale().set(0.12f * s, 0.12f * s, 1.1f * s);
+          // heading for its line as well as along it
+          e.transform().rotation().rotationTo(FORWARD,
+              this.tmp.set(offset).mul(-1f / CONVERGE).add(b.velocity).normalize());
+        }
+      }
     }
+    this.fromGun.keySet().retainAll(world.bullets());
     final Boss boss = world.boss();
     if (boss != null) {
       final var e = entityFor(boss, () -> newBoss(boss.kind));
@@ -130,7 +160,21 @@ final class WorldView {
     e.transform().scale().set(b.fromBoss ? 0.35f : 0.12f, b.fromBoss ? 0.35f : 0.12f, b.fromBoss ? 0.7f : 1.1f);
     e.transform().rotation().rotationTo(FORWARD, this.tmp.set(b.velocity).normalize());
     shown(b.position, e.transform().position());
+    if (!b.fromBoss) {
+      // drawn from the gun whose turn it is; the model has it on the line through the crosshair
+      final var gun = this.guns[this.nextGun];
+      this.nextGun = (this.nextGun + 1) % this.guns.length;
+      final float age = this.bulletTime - b.timeLeft;
+      final var offset = new Vector3f(gun).sub(e.transform().position()).fma(age, b.velocity);
+      this.fromGun.put(b, offset);
+    }
     return e;
+  }
+
+  /** Where the player's two guns are now, in the world: shots appear at them. Call before {@link #sync}. */
+  void guns(Vector3f left, Vector3f right) {
+    this.guns[0].set(left);
+    this.guns[1].set(right);
   }
 
   private Entity newBoss(Boss.Kind kind) {
@@ -167,19 +211,22 @@ final class WorldView {
       }
       case GameEvent.BossHit h -> {
         sound(this.art.clang, h.position(), 1f, 1f);
-        sparks(shown(h.position(), new Vector3f()), new Vector3f(), 8, 0.06f, 22f);
-        wreckage(shown(h.position(), new Vector3f()), new Vector3f(), 3, 0.25f, 9f, this.art.bossHull,
-            this.art.bossHull);
+        sparks(shown(h.position(), new Vector3f()), new Vector3f(), this.art.quality.scale(8), 0.06f, 22f);
+        wreckage(shown(h.position(), new Vector3f()), new Vector3f(), this.art.quality.scale(3), 0.25f, 9f,
+            this.art.bossHull, this.art.bossHull);
       }
       case GameEvent.BossDestroyed d -> {
         final boolean scout = d.kind() == Boss.Kind.SCOUT;
         sound(this.art.bigBoom, d.position(), 1.2f, scout ? 1f : 0.7f);
-        shipBurst(d.position(), d.velocity(), d.kind());
+        shipBurst(shown(d.position(), new Vector3f()), d.velocity(), d.kind().radius,
+            scout ? this.art.scoutHull : this.art.bossHull, scout ? this.art.scoutFin : this.art.bossPaint,
+            scout ? 5 : 7, scout ? 12 : 18, scout ? 18 : 28);
       }
       case GameEvent.BossAppeared a -> audio.play2D(this.art.alarm, 0.8f, AudioBus.EFFECTS);
       case GameEvent.ShipDestroyed d -> {
         audio.play2D(this.art.shipBoom, 1f, AudioBus.EFFECTS);
-        burst(d.position(), 16, 0.5f, 14f, this.art.fire);
+        shipBurst(shown(d.position(), new Vector3f()), new Vector3f(), PLAYER_SIZE, this.art.playerHull,
+            this.art.playerPaint, 6, 16, 24);
       }
       case GameEvent.WaveStarted w -> audio.play2D(this.art.chime, 0.7f, AudioBus.EFFECTS);
       case GameEvent.BossLeft l -> {
@@ -206,7 +253,7 @@ final class WorldView {
     final var at = shown(position, new Vector3f());
     final float radius = big ? World.BIG_RADIUS : World.SMALL_RADIUS;
     final var material = big ? this.art.rockMaterial : this.art.smallRockMaterial;
-    final int chips = big ? 26 : 14;
+    final int chips = this.art.quality.scale(big ? 26 : 14);
     for (int i = 0; i < chips; i++) {
       final var dir = randomDirection(new Vector3f());
       final float share = 0.12f + 0.88f * (float) Math.pow(this.random.nextFloat(), 3); // mostly small
@@ -231,7 +278,7 @@ final class WorldView {
     cloud.add(new Dust(this.scene, dustMaterial, new Vector3f(rockVelocity).mul(0.9f), radius * 0.6f,
         radius * (big ? 3.2f : 2.6f), 1.4f + 0.6f * this.random.nextFloat()));
     this.scene.add(cloud);
-    for (int i = 0; i < 5; i++) { // sparks: quick and bright
+    for (int i = 0, n = this.art.quality.scale(5); i < n; i++) { // sparks: quick and bright
       final var e = new Entity("spark");
       e.add(new MeshRenderer(this.art.ball, this.art.fire));
       e.transform().position().set(at);
@@ -243,27 +290,30 @@ final class WorldView {
     }
   }
 
-  /**
-   * An enemy ship blowing up: a flash of light, overlapping fireballs that swell, cool and fade, torn pieces of its
-   * hull (in its own materials) tumbling away with its motion, embers streaking out, and a cloud of smoke.
-   */
-  private void shipBurst(Vector3f position, Vector3f shipVelocity, Boss.Kind kind) {
-    final boolean scout = kind == Boss.Kind.SCOUT;
-    final var at = shown(position, new Vector3f());
-    final float r = kind.radius;
-    final var drift = new Vector3f(shipVelocity).mul(0.3f); // the cloud keeps a little of the ship's motion
+  /** About how big the player's ship would be, for its explosion. */
+  private static final float PLAYER_SIZE = 1.4f;
 
-    final var flash = new Entity("flash");
-    flash.transform().position().set(at);
-    final var light = Light.point(1f, 0.6f, 0.25f, 8f, r * 25f);
-    light.castShadows = false;
-    flash.add(light);
-    flash.add(new Flash(this.scene, light, 0.7f));
-    this.scene.add(flash);
+  /**
+   * A ship blowing up at {@code at} (where it is shown): a flash of light, overlapping fireballs that swell, cool and
+   * fade, torn pieces of its hull (in its own materials) tumbling away with its motion, embers streaking out, and a
+   * cloud of smoke. The counts are for the highest quality; lower qualities make fewer.
+   */
+  private void shipBurst(Vector3f at, Vector3f shipVelocity, float r, Material hull, Material trim, int puffs,
+      int pieces, int embers) {
+    final var drift = new Vector3f(shipVelocity).mul(0.3f); // the cloud keeps a little of the ship's motion
+    final var quality = this.art.quality;
+    if (quality.explosionLight) {
+      final var flash = new Entity("flash");
+      flash.transform().position().set(at);
+      final var light = Light.point(1f, 0.6f, 0.25f, 8f, r * 25f);
+      light.castShadows = false;
+      flash.add(light);
+      flash.add(new Flash(this.scene, light, 0.7f));
+      this.scene.add(flash);
+    }
 
     // a ragged cluster of puffs of fire, one after another, rather than one ball
-    final int puffs = scout ? 5 : 7;
-    for (int i = 0; i < puffs; i++) {
+    for (int i = 0, n = quality.scale(puffs); i < n; i++) {
       final var ball = new Entity("fireball");
       final var fire = this.art.fireballMaterial();
       ball.add(new MeshRenderer(this.art.smoothBall, fire)).castShadows = false;
@@ -277,10 +327,8 @@ final class WorldView {
       this.scene.add(ball);
     }
 
-    final var hull = scout ? this.art.scoutHull : this.art.bossHull;
-    final var trim = scout ? this.art.scoutFin : this.art.bossPaint;
-    wreckage(at, shipVelocity, scout ? 12 : 18, r * 0.32f, 11f, hull, trim);
-    sparks(at, drift, scout ? 18 : 28, 0.09f, 26f);
+    wreckage(at, shipVelocity, quality.scale(pieces), r * 0.32f, 11f, hull, trim);
+    sparks(at, drift, quality.scale(embers), 0.09f, 26f);
 
     final var smoke = new Entity("smoke");
     final var soot = this.art.smokeMaterial();
@@ -330,22 +378,5 @@ final class WorldView {
     final float a = (float) (2 * Math.PI * this.random.nextFloat());
     final float r = (float) Math.sqrt(1f - z * z);
     return dest.set(r * (float) Math.cos(a), r * (float) Math.sin(a), z);
-  }
-
-  private void burst(Vector3f position, int count, float size, float speed, Material material) {
-    final var at = shown(position, new Vector3f());
-    for (int i = 0; i < count; i++) {
-      final var e = new Entity("debris");
-      e.add(new MeshRenderer(this.art.cube, material));
-      e.transform().position().set(at);
-      final var dir = new Vector3f(this.random.nextFloat() - 0.5f, this.random.nextFloat() - 0.5f,
-          this.random.nextFloat() - 0.5f).normalize();
-      final float s = size * (0.5f + this.random.nextFloat());
-      e.add(new Debris(this.scene, dir.mul(speed * (0.4f + this.random.nextFloat())),
-          new Vector3f(this.random.nextFloat(), this.random.nextFloat(), this.random.nextFloat()).add(0.1f, 0.1f, 0.1f),
-          2f + 6f * this.random.nextFloat(), 0.7f + 0.8f * this.random.nextFloat(), s));
-      e.transform().scale().set(s);
-      this.scene.add(e);
-    }
   }
 }

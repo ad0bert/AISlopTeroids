@@ -53,9 +53,10 @@ final class PauseState implements GameState {
 
   @Override
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
+    Hud.screen(width, height);
     Hud.dim(ui, width, height, 0.5f);
     Hud.centered(ui, "PAUSED", width, height * 0.4f, 3f, 1f, 1f, 1f, 1f);
     Hud.centered(ui, "P or click to continue      O  options      Q  quit to the title screen", width,
-        height * 0.4f + ui.lineHeight(3f) + 8f, 1.3f, 0.85f, 0.85f, 0.85f, 1f);
+        height * 0.4f + Hud.lineHeight(ui, 3f) + 8f, 1.3f, 0.85f, 0.85f, 0.85f, 1f);
   }
 }

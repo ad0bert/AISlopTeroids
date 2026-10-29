@@ -7,10 +7,14 @@ import engine.ui.Gui;
 
 /**
  * The options panel, opened with O from the title screen or the pause menu: mouse sensitivity, inverted look, volumes,
- * fullscreen, vsync and the radar. Changes take effect at once and are saved when the panel closes (Done, or O again).
+ * fullscreen, vsync, graphics quality, the radar and the view. Changes take effect at once and are saved when the
+ * panel closes (Done, or O again).
  */
 final class SettingsState implements GameState {
-  private static final float PANEL_WIDTH = 380f;
+  /** The panel's width in a window {@link Hud#BASE_HEIGHT} high; it grows with the window, as the text does. */
+  private static final float PANEL_WIDTH = 420f;
+  /** The panel's text size, as a scale of {@link Hud#BASE_SIZE}. */
+  private static final float TEXT_SCALE = 1.15f;
 
   private final AstroidsGame game;
   private Gui gui;
@@ -40,6 +44,19 @@ final class SettingsState implements GameState {
     }
   }
 
+  /** Larger text than the engine's default, growing with the window; a solid panel and brighter section labels. */
+  private static void style(Gui.Style style) {
+    final float z = Hud.zoom();
+    style.font = Hud.font(TEXT_SCALE);
+    style.padding = 7f * z;
+    style.spacing = 5f * z;
+    style.scrollbar = 10f * z;
+    style.panel[3] = 0.95f;
+    style.dimText[0] = 0.85f;
+    style.dimText[1] = 0.87f;
+    style.dimText[2] = 0.92f;
+  }
+
   @Override
   public boolean simulates() {
     return false;
@@ -47,33 +64,44 @@ final class SettingsState implements GameState {
 
   @Override
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
+    Hud.screen(width, height);
     Hud.dim(ui, width, height, 0.55f);
     final var o = this.game.options();
     final var g = this.gui;
+    style(g.style);
+    final float panelWidth = PANEL_WIDTH * Hud.zoom();
     g.begin(ui, width, height, true);
-    g.beginPanel("Options", (width - PANEL_WIDTH) / 2f, height * 0.18f, PANEL_WIDTH);
+    g.beginPanel("Options", (width - panelWidth) / 2f, height * 0.14f, panelWidth);
     g.label("Controls");
     o.mouseSensitivity = g.slider("Mouse sensitivity", o.mouseSensitivity, Options.MIN_SENSITIVITY,
         Options.MAX_SENSITIVITY);
     o.invertY = g.checkbox("Invert mouse Y", o.invertY);
-    g.space(6f);
+    g.space(6f * Hud.zoom());
     g.label("Sound");
     o.masterVolume = g.slider("Volume", o.masterVolume, 0f, 1f);
     o.effectsVolume = g.slider("Effects", o.effectsVolume, 0f, 1f);
     o.ambienceVolume = g.slider("Ambience", o.ambienceVolume, 0f, 1f);
-    g.space(6f);
+    g.space(6f * Hud.zoom());
     g.label("Screen");
     g.row(2);
     o.fullscreen = g.checkbox("Fullscreen", o.fullscreen);
     o.vsync = g.checkbox("VSync", o.vsync);
+    if (g.button("Graphics quality: " + o.quality.label)) {
+      o.quality = o.quality.next();
+    }
+    g.row(2);
     o.radar = g.checkbox("Show the radar", o.radar);
-    g.space(10f);
+    if (g.button("View: " + o.view.label)) {
+      o.view = o.view.next();
+    }
+    g.space(10f * Hud.zoom());
     g.row(2);
     if (g.button("Defaults")) {
       final var defaults = new Options();
       defaults.fullscreen = o.fullscreen; // the window stays as it is
       defaults.vsync = o.vsync;
       defaults.difficulty = o.difficulty; // picked on the title screen, not here
+      defaults.quality = o.quality; // the computer is the same
       this.game.replaceOptions(defaults);
     }
     if (g.button("Done")) {
@@ -81,7 +109,7 @@ final class SettingsState implements GameState {
     }
     g.endPanel();
     g.end();
-    this.game.options().apply(engine);
-    Hud.centered(ui, "O or Done to close", width, height * 0.9f, 1.1f, 0.8f, 0.8f, 0.85f, 1f);
+    this.game.applyOptions(engine);
+    Hud.centered(ui, "O or Done to close", width, height * 0.93f, 1.1f, 0.88f, 0.9f, 0.95f, 1f);
   }
 }

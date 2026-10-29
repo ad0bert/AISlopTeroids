@@ -6,9 +6,9 @@ import engine.core.Engine;
 import engine.core.Settings;
 
 /**
- * The player's choices: mouse sensitivity, inverted look, volumes (all, effects, ambience), fullscreen, vsync, the radar, and the difficulty
- * (picked on the title screen). Kept in the engine's {@link Settings} file in the user's config directory, so they
- * survive restarts.
+ * The player's choices: mouse sensitivity, inverted look, volumes (all, effects, ambience), fullscreen, vsync,
+ * graphics quality, the radar and the view (cockpit, none or behind the ship), and the difficulty (picked on the
+ * title screen). Kept in the engine's {@link Settings} file in the user's config directory, so they survive restarts.
  */
 final class Options {
   static final float MIN_SENSITIVITY = 0.02f;
@@ -24,6 +24,8 @@ final class Options {
   boolean fullscreen;
   boolean vsync = true;
   boolean radar = true;
+  View view = View.COCKPIT;
+  Quality quality = Quality.HIGH;
   Difficulty difficulty = Difficulty.NORMAL;
 
   /** The options in {@code settings}, with the window's current state as the default for fullscreen and vsync. */
@@ -38,6 +40,10 @@ final class Options {
     o.fullscreen = settings.getBoolean("video.fullscreen", fullscreen);
     o.vsync = settings.getBoolean("video.vsync", vsync);
     o.radar = settings.getBoolean("hud.radar", true);
+    // before the views there was only the cockpit, on or off
+    final var before = settings.getBoolean("hud.cockpit", true) ? View.COCKPIT : View.CLEAR;
+    o.view = View.parse(settings.get("hud.view", before.name()), before);
+    o.quality = Quality.parse(settings.get("video.quality", Quality.HIGH.name()));
     o.difficulty = Difficulty.parse(settings.get("game.difficulty", Difficulty.NORMAL.name()));
     return o;
   }
@@ -51,6 +57,8 @@ final class Options {
         .set("video.fullscreen", this.fullscreen)
         .set("video.vsync", this.vsync)
         .set("hud.radar", this.radar)
+        .set("hud.view", this.view.name())
+        .set("video.quality", this.quality.name())
         .set("game.difficulty", this.difficulty.name());
   }
 
@@ -64,6 +72,7 @@ final class Options {
       engine.setFullscreen(this.fullscreen);
     }
     engine.setVsync(this.vsync);
+    this.quality.apply(engine.backend().settings());
   }
 
   /** Pitch change in degrees for a vertical mouse movement (screen y grows downwards). */

@@ -2,6 +2,7 @@ package astroids;
 
 import java.util.Locale;
 
+import org.joml.Quaternionf;
 import org.joml.Vector2f;
 import org.joml.Vector3f;
 
@@ -16,6 +17,7 @@ import engine.core.LevelState;
 import engine.ecs.Entity;
 import engine.input.InputState;
 import engine.render.Camera;
+import engine.render.MeshRenderer;
 import engine.render.UiCanvas;
 
 /**
@@ -48,6 +50,32 @@ final class PlayState extends LevelState {
   private float messageUntil;
   private float flash;
   private float warpFlash;
+  /** Where the player looks and fires: the ship's turn. In the first-person views it is the camera's too. */
+  private final Quaternionf aim = new Quaternionf();
+  /** The player's ship from inside: child of the camera, hidden while the ship is gone or in another view. */
+  private Entity cockpit;
+  private GlassDisplay glass;
+  /** The player's whole ship, shown in the view from behind it. */
+  private Entity playerShip;
+  /** The view from behind the ship: how far behind and above it the camera is, and where the crosshair meets the
+   * line of fire (this far ahead of the ship). */
+  static final float CHASE_BACK = 5.5f;
+  static final float CHASE_UP = 1.7f;
+  static final float CHASE_AIM = 45f;
+  /** The player's ship model is made with a radius of about 1.2; this brings it to the ship's size. */
+  static final float PLAYER_SCALE = 0.85f;
+  /** Seconds the camera takes to pull back from a destroyed ship, and how far back and up it goes. */
+  static final float DEATH_PULL = 0.9f;
+  static final float DEATH_BACK = 11f;
+  static final float DEATH_UP = 3.5f;
+  /** Where the ship was destroyed, the way it was facing then, and when (-1: it is flying). */
+  private final Vector3f deathAt = new Vector3f();
+  /** Where the camera was then (behind the ship in the view from behind). */
+  private final Vector3f deathFrom = new Vector3f();
+  private final Vector3f deathBack = new Vector3f();
+  private final Vector3f deathUp = new Vector3f();
+  private final Quaternionf deathView = new Quaternionf();
+  private float deathTime = -1f;
   /** Ambience that follows the game: the engine (by speed) and a throb while an enemy ship is about. */
   private AudioSource hum;
   private AudioSource danger;
@@ -65,16 +93,41 @@ final class PlayState extends LevelState {
   @Override
   protected void build(Engine engine) {
     this.difficulty = this.game.options().difficulty;
+    // -Dastroids.view=COCKPIT, CLEAR or CHASE: start in that view (screenshots)
+    final var view = System.getProperty("astroids.view");
+    if (view != null) {
+      this.game.options().view = View.parse(view, this.game.options().view);
+    }
     this.custom = this.game.loadTuning().custom();
     this.world = World.newGame(System.nanoTime(), this.game.tuning().tuning());
     this.view = new WorldView(engine, this.game.art());
     this.camera = this.game.art().addBackdrop(engine.scene());
     final var art = this.game.art();
+    this.cockpit = new Entity("cockpit");
+    this.cockpit.transform().setParent(this.camera.transform());
+    engine.scene().add(this.cockpit);
+    addParts(engine, this.cockpit, art.cockpitParts, false);
+    this.glass = new GlassDisplay(engine.scene(), this.cockpit, art.cube, art.holoOn, art.holoGhost, art.holoJump);
+    this.playerShip = new Entity("player ship");
+    engine.scene().add(this.playerShip);
+    addParts(engine, this.playerShip, art.playerParts, true);
     art.addLoop(engine.scene(), "ambience", art.playAmbience, 0.7f);
     this.hum = art.addLoop(engine.scene(), "engine hum", art.engineHum, 0f);
     this.danger = art.addLoop(engine.scene(), "danger", art.danger, 0f);
     this.wasCaptured = engine.isMouseCaptured();
     afterStep(engine, 0f);
+  }
+
+  private static void addParts(Engine engine, Entity parent, java.util.List<Art.Part> parts, boolean shadows) {
+    for (var part : parts) {
+      final var e = new Entity(parent.name() + " part");
+      e.add(new MeshRenderer(part.mesh(), part.material())).castShadows = shadows;
+      e.transform().position().set(part.position());
+      e.transform().rotation().set(part.rotation());
+      e.transform().scale().set(part.scale());
+      e.transform().setParent(parent.transform());
+      engine.scene().add(e);
+    }
   }
 
   @Override
@@ -88,10 +141,15 @@ final class PlayState extends LevelState {
     this.time += dt;
     final var input = engine.input();
     look(engine, dt);
+    if (input.wasActionPressed("view")) {
+      final var options = this.game.options();
+      options.view = options.view.next();
+      this.game.saveOptions();
+      say(options.view.label.toUpperCase(Locale.ROOT), 1.2f);
+    }
 
-    final var t = this.camera.transform();
-    t.forward(this.forward);
-    t.right(this.right);
+    this.aim.transform(this.forward.set(0f, 0f, -1f));
+    this.aim.transform(this.right.set(1f, 0f, 0f));
     this.up.set(this.right).cross(this.forward);
     this.thrust.zero();
     axis(input, "forward", "back", this.forward);
@@ -145,8 +203,7 @@ final class PlayState extends LevelState {
       this.pitch = 12f * (float) Math.sin(this.time * 0.7f);
     }
     this.pitch = Math.max(-85f, Math.min(85f, this.pitch));
-    this.camera.transform().rotation().identity().rotateY((float) Math.toRadians(this.yaw))
-        .rotateX((float) Math.toRadians(this.pitch));
+    this.aim.identity().rotateY((float) Math.toRadians(this.yaw)).rotateX((float) Math.toRadians(this.pitch));
   }
 
   private void axis(InputState input, String plus, String minus, Vector3f direction) {
@@ -162,14 +219,65 @@ final class PlayState extends LevelState {
   private void afterStep(Engine engine, float dt) {
     final var ship = this.world.ship();
     final var events = this.world.drainEvents();
-    final var p = this.camera.transform().position();
-    final boolean jumped = p.distanceSquared(ship.position) > this.world.arena() * this.world.arena()
-        || events.stream().anyMatch(e -> e instanceof GameEvent.Hyperspace);
-    p.set(ship.position);
-    if (jumped) {
-      this.camera.transform().snapshot(); // flew through a wall, came back in the middle, or jumped
+    final var view = this.camera.transform();
+    final var p = view.position();
+    final var shown = this.game.options().view;
+    if (events.stream().anyMatch(e -> e instanceof GameEvent.ShipDestroyed)) {
+      // remember the moment: the camera pulls back from here to watch the ship go
+      this.deathAt.set(ship.position);
+      this.deathFrom.set(p);
+      this.deathView.set(view.rotation());
+      this.aim.transform(this.deathBack.set(0f, 0f, 1f));
+      this.aim.transform(this.deathUp.set(0f, 1f, 0f));
+      this.deathTime = this.time;
     }
-    this.view.sync(this.world, ship.position, dt);
+    final var shipTurn = this.playerShip.transform();
+    if (ship.alive) {
+      final var target = new Vector3f(ship.position);
+      if (shown.firstPerson()) {
+        view.rotation().set(this.aim);
+      } else {
+        // behind and above the ship, tilted down so the crosshair is where the shots go, CHASE_AIM ahead
+        target.add(this.aim.transform(new Vector3f(0f, CHASE_UP, CHASE_BACK)));
+        view.rotation().set(this.aim).rotateX((float) -Math.atan2(CHASE_UP, CHASE_BACK + CHASE_AIM));
+      }
+      final boolean jumped = p.distanceSquared(target) > this.world.arena() * this.world.arena()
+          || events.stream().anyMatch(e -> e instanceof GameEvent.Hyperspace || e instanceof GameEvent.ShipRespawned);
+      p.set(target);
+      shipTurn.position().set(ship.position);
+      shipTurn.rotation().set(this.aim);
+      if (jumped) {
+        view.snapshot(); // flew through a wall, jumped, or the next ship came: no smear across the screen
+        shipTurn.snapshot();
+      }
+      this.deathTime = -1f;
+    } else if (this.deathTime >= 0f) {
+      final float u = Math.min(1f, (this.time - this.deathTime) / DEATH_PULL);
+      final float ease = 1f - (1f - u) * (1f - u) * (1f - u);
+      final var away = new Vector3f(this.deathBack).mul(DEATH_BACK).fma(DEATH_UP, this.deathUp).add(this.deathAt);
+      this.deathFrom.lerp(away, ease, p);
+      final var toWreck = new Vector3f(this.deathAt).sub(p);
+      view.rotation().set(this.deathView);
+      if (toWreck.lengthSquared() > 1e-4f) {
+        view.rotation().slerp(aim(toWreck, this.deathUp), ease);
+      }
+    }
+    this.cockpit.transform().scale().set(ship.alive && shown == View.COCKPIT ? 1f : 0f);
+    shipTurn.scale().set(ship.alive && !shown.firstPerson() ? PLAYER_SCALE : 0f);
+    final var tuning = this.world.tuning();
+    this.glass.show(ship.velocity.length(), tuning.shipMaxSpeed,
+        1f - ship.hyperspaceCooldown / Math.max(1e-3f, tuning.hyperspaceCooldown), this.time);
+    final var left = new Vector3f();
+    final var right = new Vector3f();
+    if (shown.firstPerson()) {
+      view.rotation().transform(left.set(Art.COCKPIT_GUNS[0])).add(p);
+      view.rotation().transform(right.set(Art.COCKPIT_GUNS[1])).add(p);
+    } else {
+      this.aim.transform(left.set(Art.PLAYER_GUNS[0]).mul(PLAYER_SCALE)).add(ship.position);
+      this.aim.transform(right.set(Art.PLAYER_GUNS[1]).mul(PLAYER_SCALE)).add(ship.position);
+    }
+    this.view.guns(left, right);
+    this.view.sync(this.world, new Vector3f(p), dt);
     this.view.play(events);
     this.flash = Math.max(0f, this.flash - dt * 1.5f);
     this.warpFlash = Math.max(0f, this.warpFlash - dt * 2f);
@@ -184,7 +292,7 @@ final class PlayState extends LevelState {
       case GameEvent.ExtraLife l -> say("EXTRA SHIP!", 2.5f);
       case GameEvent.Hyperspace h -> this.warpFlash = 1f;
       case GameEvent.ShipDestroyed s -> {
-        this.flash = 0.8f;
+        this.flash = 0.5f; // less than before: now the explosion is there to see
         if (this.world.lives() > 0) {
           say("SHIP LOST", this.world.tuning().respawnDelay);
         }
@@ -213,6 +321,45 @@ final class PlayState extends LevelState {
     return value < target ? Math.min(target, value + step) : Math.max(target, value - step);
   }
 
+  /**
+   * The ship's own displays: markers for the enemy ship and the last rocks, and the radar. While the ship is gone the
+   * view is the pulled-back camera's, so they are not drawn. The markers are placed as seen from the camera
+   * ({@code eye}, behind the ship in the view from behind it), the radar is the ship's.
+   */
+  private void shipHud(UiCanvas ui, int width, int height, Vector3f shipAt, Vector3f eye) {
+    final var view = this.camera.transform().rotation();
+    final float fov = this.camera.get(Camera.class).fovDegrees;
+    final var rocks = this.world.asteroids();
+    if (rocks.size() < MARK_ROCKS_BELOW) {
+      final var toRock = new Vector3f();
+      for (var rock : rocks) {
+        this.world.delta(eye, rock.position, toRock);
+        Hud.marker(ui, width, height, toRock, view, fov, String.format(Locale.ROOT, "ROCK %.0f m", toRock.length()),
+            0.85f, 0.85f, 0.9f);
+      }
+    }
+    final var boss = this.world.boss();
+    if (boss != null) {
+      final var toBoss = this.world.delta(eye, boss.position, new Vector3f());
+      if (boss.kind == Boss.Kind.SCOUT) {
+        Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "SCOUT %.0f m", toBoss.length()),
+            1f, 0.7f, 0.15f);
+      } else {
+        Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()),
+            1f, 0.3f, 0.25f);
+      }
+    }
+    if (this.game.options().radar) {
+      Radar.draw(ui, width, height, this.world, shipAt, view);
+    }
+  }
+
+  /** The rotation of a camera that looks along {@code direction}, with {@code up} upwards on the screen. */
+  static Quaternionf aim(Vector3f direction, Vector3f up) {
+    // the view rotation turns the direction to -z; the camera's own rotation is its inverse
+    return new Quaternionf().lookAlong(new Vector3f(direction).normalize(), up).conjugate();
+  }
+
   private void say(String text, float seconds) {
     this.message = text;
     this.messageUntil = this.time + seconds;
@@ -220,6 +367,7 @@ final class PlayState extends LevelState {
 
   @Override
   public void draw(Engine engine, UiCanvas ui, int width, int height) {
+    Hud.screen(width, height);
     if (this.flash > 0f) {
       ui.drawRect(0f, 0f, width, height, 0.8f, 0.1f, 0.05f, this.flash * 0.45f);
     }
@@ -230,58 +378,40 @@ final class PlayState extends LevelState {
       return; // the game-over screen takes over
     }
     final var ship = this.world.ship();
+    // in the cockpit, speed and hyperspace are on its glass (GlassDisplay)
+    final boolean inCockpit = ship.alive && this.game.options().view == View.COCKPIT;
     if (ship.alive) {
       Hud.crosshair(ui, width, height);
     }
     Hud.text(ui, String.format(Locale.ROOT, "SCORE  %d", this.world.score()), 16f, 14f, 1.6f, 1f, 1f, 1f, 1f);
     Hud.text(ui, "WAVE " + this.world.wave() + "    ROCKS " + this.world.asteroids().size() + "    "
-        + this.difficulty.label.toUpperCase(Locale.ROOT), 16f, 14f + ui.lineHeight(1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f,
+        + this.difficulty.label.toUpperCase(Locale.ROOT), 16f, 14f + Hud.lineHeight(ui, 1.6f) + 2f, 1.1f, 0.75f, 0.8f, 0.9f,
         1f);
     final int ships = Math.max(0, this.world.lives());
     final var lives = "SHIPS " + (ships > 6 ? "▲ x" + ships : "▲ ".repeat(ships).trim());
-    Hud.text(ui, lives, width - ui.textWidth(lives, 1.6f) - 16f, 14f, 1.6f, 0.6f, 1f, 0.8f, 1f);
+    Hud.text(ui, lives, width - Hud.width(ui, lives, 1.6f) - 16f, 14f, 1.6f, 0.6f, 1f, 0.8f, 1f);
     if (ship.alive && ship.invulnerable > 0f && ((int) (this.time * 6) % 2 == 0)) {
       Hud.centered(ui, "SHIELD", width, height / 2f + 24f, 1.1f, 0.6f, 1f, 0.8f, 0.9f);
     }
     if (this.custom) {
-      Hud.text(ui, "CUSTOM TUNING", 16f, 14f + ui.lineHeight(1.6f) + ui.lineHeight(1.1f) + 6f, 1f, 1f, 0.75f, 0.3f, 1f);
+      Hud.text(ui, "CUSTOM TUNING", 16f, 14f + Hud.lineHeight(ui, 1.6f) + Hud.lineHeight(ui, 1.1f) + 6f, 1f, 1f, 0.75f, 0.3f, 1f);
     }
-    final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
-    final float bottom = height - ui.lineHeight(1.1f) - 14f;
-    Hud.text(ui, speed, 16f, bottom, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
     final float cooldown = ship.hyperspaceCooldown;
-    final var jump = cooldown > 0f ? String.format(Locale.ROOT, "JUMP %.0f", Math.ceil(cooldown)) : "JUMP READY  (E)";
-    final float jumpX = 16f + ui.textWidth("SPEED 00", 1.1f) + 30f;
-    if (cooldown > 0f) {
-      Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.62f, 0.7f, 1f);
-    } else {
-      Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.85f, 1f, 1f);
+    if (!inCockpit) {
+      final var speed = String.format(Locale.ROOT, "SPEED %2.0f", ship.velocity.length());
+      final float bottom = height - Hud.lineHeight(ui, 1.1f) - 14f;
+      Hud.text(ui, speed, 16f, bottom, 1.1f, 0.75f, 0.8f, 0.9f, 1f);
+      final var jump = cooldown > 0f ? String.format(Locale.ROOT, "JUMP %.0f", Math.ceil(cooldown)) : "JUMP READY  (E)";
+      final float jumpX = 16f + Hud.width(ui, "SPEED 00", 1.1f) + 30f;
+      if (cooldown > 0f) {
+        Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.62f, 0.7f, 1f);
+      } else {
+        Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.85f, 1f, 1f);
+      }
     }
 
-    final var view = this.camera.transform().rotation();
-    final float fov = this.camera.get(Camera.class).fovDegrees;
-    final var rocks = this.world.asteroids();
-    if (rocks.size() < MARK_ROCKS_BELOW) {
-      final var toRock = new Vector3f();
-      for (var rock : rocks) {
-        this.world.delta(ship.position, rock.position, toRock);
-        Hud.marker(ui, width, height, toRock, view, fov, String.format(Locale.ROOT, "ROCK %.0f m", toRock.length()),
-            0.85f, 0.85f, 0.9f);
-      }
-    }
-    final var boss = this.world.boss();
-    if (boss != null) {
-      final var toBoss = this.world.delta(ship.position, boss.position, new Vector3f());
-      if (boss.kind == Boss.Kind.SCOUT) {
-        Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "SCOUT %.0f m", toBoss.length()),
-            1f, 0.7f, 0.15f);
-      } else {
-        Hud.marker(ui, width, height, toBoss, view, fov, String.format(Locale.ROOT, "ENEMY %.0f m", toBoss.length()),
-            1f, 0.3f, 0.25f);
-      }
-    }
-    if (this.game.options().radar) {
-      Radar.draw(ui, width, height, this.world, ship.position, view);
+    if (ship.alive) {
+      shipHud(ui, width, height, ship.position, this.camera.transform().position());
     }
     if (this.time < this.messageUntil) {
       final float fade = Math.min(1f, (this.messageUntil - this.time) * 2f);

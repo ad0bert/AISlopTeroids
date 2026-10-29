@@ -43,6 +43,8 @@ public final class AstroidsGame implements Game {
     input.bind("fullscreen", KeyEvent.VK_F11);
     input.bind("options", KeyEvent.VK_O);
     input.bind("hyperspace", KeyEvent.VK_E);
+    input.bind("view", KeyEvent.VK_V); // cockpit, no cockpit, behind the ship
+    input.bindGamepad("view", Gamepad.BUTTON_Y);
     input.bindGamepad("hyperspace", Gamepad.BUTTON_B, Gamepad.BUTTON_LEFT_BUMPER);
     input.bind("previous", KeyEvent.VK_LEFT, KeyEvent.VK_A);
     input.bindGamepad("previous", Gamepad.BUTTON_DPAD_LEFT);
@@ -57,7 +59,7 @@ public final class AstroidsGame implements Game {
     }
     this.settings = Settings.load(settingsFile(engine));
     this.options = Options.load(this.settings, engine.isFullscreen(), engine.isVsync());
-    this.options.apply(engine);
+    applyOptions(engine);
     this.tuningFile = settingsFile(engine).resolveSibling("tuning.properties");
     try {
       Tuning.writeExample(this.tuningFile.resolveSibling("tuning.example.properties"));
@@ -90,7 +92,13 @@ public final class AstroidsGame implements Game {
     return this.options;
   }
 
-  /** Swaps in other options (the defaults); they take effect at the next {@link Options#apply}. */
+  /** Puts the options into effect, the graphics quality too. */
+  void applyOptions(Engine engine) {
+    this.options.apply(engine);
+    this.art.quality = this.options.quality;
+  }
+
+  /** Swaps in other options (the defaults); they take effect at the next {@link #applyOptions}. */
   void replaceOptions(Options replacement) {
     this.options = replacement;
   }
