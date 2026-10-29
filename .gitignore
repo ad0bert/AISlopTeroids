@@ -12,4 +12,4 @@ hs_err_pid*
 .vscode/
 
 # the high score when there is no user data directory
-simple-astroids-scores.properties
+ai-slop-teroids-scores.properties

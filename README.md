@@ -1,4 +1,4 @@
-# SimpleAstroids
+# AISlopTeroids
 
 The classic Asteroids as a 3D first-person game, built on
 [EngineNamedScratch](https://github.com/ad0bert/EngineNamedScratch). You fly a ship through a cube of space that wraps
@@ -92,9 +92,9 @@ hyperspace and the arena size can all be changed without rebuilding:
 
 1. Start the game once. It writes `tuning.example.properties` into your config directory, listing every value with its
    default (Normal's, with Easy's and Hard's in brackets where they differ) and what it does:
-   - Linux: `~/.config/simple-astroids`
-   - macOS: `~/Library/Application Support/simple-astroids`
-   - Windows: `%APPDATA%\simple-astroids`
+   - Linux: `~/.config/ai-slop-teroids`
+   - macOS: `~/Library/Application Support/ai-slop-teroids`
+   - Windows: `%APPDATA%\ai-slop-teroids`
 2. Copy it to `tuning.properties` in the same folder, remove the `#` in front of the lines you want to change, and edit
    the values. For example, `ship.maxSpeed = 35` or `enemy.fireInterval = 2.5`.
 3. Start a new game. The file is read again for every game, so restarting the program isn't necessary.
@@ -124,13 +124,13 @@ has `read:packages`, then build with `-Pgithub-packages`.
 Then:
 
 ```bash
-mvn package                              # tests, then target/dist/simple-astroids.jar (+ lib/)
-java -jar target/dist/simple-astroids.jar
+mvn package                              # tests, then target/dist/ai-slop-teroids.jar (+ lib/)
+java -jar target/dist/ai-slop-teroids.jar
 mvn package -Pjpackage                   # also target/jpackage: the game with its own Java runtime
 ```
 
-`-Dastroids.autopilot=true` starts straight in a game that flies and shoots by itself, and `-Dastroids.showOptions=true`
-opens the options panel at start. `-Dastroids.view=COCKPIT`, `CLEAR` or `CHASE` starts the game in that view. All are
+`-Daislopteroids.autopilot=true` starts straight in a game that flies and shoots by itself, and `-Daislopteroids.showOptions=true`
+opens the options panel at start. `-Daislopteroids.view=COCKPIT`, `CLEAR` or `CHASE` starts the game in that view. All are
 handy for screenshots.
 The engine's system properties (`engine.fullscreen`, `engine.vsync`, `engine.screenshot`, ...) work too. CI runs the
 title screen and an autopilot game under Xvfb and keeps the screenshots as an artifact.
@@ -146,7 +146,7 @@ tagging. Actions → release → Run workflow, with a tag, publishes an existing
 
 | | |
 |---|---|
-| `astroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, enemy ships, ship, waves, score) steps by a fixed time step and reports `GameEvent`s, with its numbers from a `Tuning` (a `Difficulty`'s values, plus `tuning.properties`). Deterministic for a seed and a tuning, and unit-tested. |
+| `aislopteroids.model` | The rules, without rendering: `World` (arena, asteroids, bullets, enemy ships, ship, waves, score) steps by a fixed time step and reports `GameEvent`s, with its numbers from a `Tuning` (a `Difficulty`'s values, plus `tuning.properties`). Deterministic for a seed and a tuning, and unit-tested. |
 | `WorldView` | Mirrors a `World` with engine entities, drawn at their nearest wrap-around copy; turns events into debris and sounds. |
 | `TitleState`, `PlayState`, `PauseState`, `GameOverState` | The screens, as engine game states. `TitleState` and `PlayState` are `LevelState`s that own the scene. `GameOverState` takes the name for the score table. |
 | `RockArt` | The rocks' shapes (a sphere pushed in and out by random lumps and craters, one per seed) and their surface: a seamless height field turned into a colour texture and a bump map. Also the sharp-edged chips and the dust cloud a rock breaks into (`Debris`, `Dust`). |

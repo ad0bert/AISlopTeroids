@@ -64,7 +64,7 @@ jobs:
         run: |
           version="${TAG#v}"
           mkdir out
-          name="SimpleAstroids-$version-${{ matrix.platform }}"
+          name="AISlopTeroids-$version-${{ matrix.platform }}"
           if [ "$RUNNER_OS" = Windows ]; then
             (cd target/jpackage && 7z a -bd "../../out/$name.zip" .)
           else
@@ -74,7 +74,7 @@ jobs:
             tar -czf "out/$name.tar.gz" -C target/jpackage . # keeps the launcher executable
           fi
           if [ "$RUNNER_OS" = Linux ]; then # the runnable jar is the same everywhere: one copy is enough
-            (cd target/dist && zip -q -r "../../out/SimpleAstroids-$version-java.zip" .)
+            (cd target/dist && zip -q -r "../../out/AISlopTeroids-$version-java.zip" .)
           fi
           ls -l out
       - uses: actions/upload-artifact@v7
@@ -108,8 +108,8 @@ jobs:
             tail -n +2 "$notes_file" | sed '/./,$!d' > release-notes.md # without the blank lines after the title
           else
             echo "::warning::No $notes_file; the release gets a plain title and description"
-            title="SimpleAstroids $version"
-            echo "SimpleAstroids $version" > release-notes.md
+            title="AISlopTeroids $version"
+            echo "AISlopTeroids $version" > release-notes.md
           fi
           if gh release view "$TAG" > /dev/null 2>&1; then
             echo "::notice::Release $TAG exists; updating its title, notes and files"
