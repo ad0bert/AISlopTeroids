@@ -110,9 +110,9 @@ You need JDK 25 and Maven. The game depends on the engine, `io.github.ad0bert:en
 **Build the engine yourself (no credentials needed).** This is what CI does:
 
 ```bash
-git clone --branch v0.8.4 https://github.com/ad0bert/EngineNamedScratch.git
+git clone --branch v0.8.5 https://github.com/ad0bert/EngineNamedScratch.git
 cd EngineNamedScratch
-mvn -q versions:set -DnewVersion=0.8.4 -DgenerateBackupPoms=false
+mvn -q versions:set -DnewVersion=0.8.5 -DgenerateBackupPoms=false
 mvn -q install -DskipTests -pl engine -am
 ```
 

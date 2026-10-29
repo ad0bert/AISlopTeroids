@@ -57,6 +57,8 @@ final class PlayState extends LevelState {
   private GlassDisplay glass;
   /** The player's whole ship, shown in the view from behind it. */
   private Entity playerShip;
+  /** The fire out of its engine while it thrusts ahead. */
+  private Exhaust exhaust;
   /** The view from behind the ship: how far behind and above it the camera is, and where the crosshair meets the
    * line of fire (this far ahead of the ship). */
   static final float CHASE_BACK = 5.5f;
@@ -111,6 +113,7 @@ final class PlayState extends LevelState {
     this.playerShip = new Entity("player ship");
     engine.scene().add(this.playerShip);
     addParts(engine, this.playerShip, art.playerParts, true);
+    this.exhaust = new Exhaust(engine.scene(), this.playerShip);
     art.addLoop(engine.scene(), "ambience", art.playAmbience, 0.7f);
     this.hum = art.addLoop(engine.scene(), "engine hum", art.engineHum, 0f);
     this.danger = art.addLoop(engine.scene(), "danger", art.danger, 0f);
@@ -264,6 +267,7 @@ final class PlayState extends LevelState {
     }
     this.cockpit.transform().scale().set(ship.alive && shown == View.COCKPIT ? 1f : 0f);
     shipTurn.scale().set(ship.alive && !shown.firstPerson() ? PLAYER_SCALE : 0f);
+    this.exhaust.show(this.thrust.dot(this.forward), ship.alive && !shown.firstPerson(), this.game.art().quality, dt);
     final var tuning = this.world.tuning();
     this.glass.show(ship.velocity.length(), tuning.shipMaxSpeed,
         1f - ship.hyperspaceCooldown / Math.max(1e-3f, tuning.hyperspaceCooldown), this.time);
