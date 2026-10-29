@@ -12,6 +12,10 @@ public final class Ship {
   /** Seconds until the ship comes back after it was destroyed. */
   public float respawnIn;
   public float fireCooldown;
+  /** What is left in the gun's battery, in shots; it recharges only while the gun is not fired. */
+  public float battery;
+  /** Seconds until the battery starts recharging, counted down while fire is not held. */
+  public float rechargeIn;
   /** Seconds until the next hyperspace jump is possible. */
   public float hyperspaceCooldown;
 

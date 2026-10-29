@@ -15,7 +15,8 @@ import engine.render.MeshRenderer;
 
 /**
  * The readouts projected on the cockpit's glass, made of light rather than text: the speed in seven-segment digits
- * over a bar to the left of the middle, the hyperspace charge as a bar of cells to the right, and a dashed ring round
+ * over a bar to the left of the middle, the hyperspace charge as a bar of cells to the right with the gun's battery
+ * under it, and a dashed ring round
  * the crosshair. Every segment and cell has a faint ghost that is always there, as on a real display.
  *
  * <p>
@@ -32,6 +33,7 @@ final class GlassDisplay {
   static final int SPEED_DIGITS = 3;
   static final int SPEED_CELLS = 10;
   static final int JUMP_CELLS = 8;
+  static final int BATTERY_CELLS = 10;
   /** How far round from straight ahead the two readouts are, in degrees, and how high above the sill. */
   static final float READOUT_DEGREES = 22f;
   static final float READOUT_LIFT = 0.13f;
@@ -50,17 +52,23 @@ final class GlassDisplay {
   private final List<Entity[]> digits = new ArrayList<>(); // per digit: its seven lit segments
   private final List<Entity> speedCells = new ArrayList<>();
   private final List<Entity> jumpCells = new ArrayList<>();
+  private final List<Entity> batteryCells = new ArrayList<>();
   /** Lit segments and cells keep their size here while they are switched off (scale 0). */
   private final Map<Entity, Vector3f> sizes = new IdentityHashMap<>();
   private final Material jumpLight;
   private final Vector3f jumpColor = new Vector3f();
+  private final Material batteryLight;
+  private final Vector3f batteryColor = new Vector3f();
 
   /**
    * Builds the displays under {@code cockpit}, from {@code cube} (a cube of half-size 1), {@code on} for what is lit
    * and {@code ghost} for the faint unlit segments. {@code jump} is the hyperspace bar's own light, which pulses when
    * the jump is ready.
    */
-  GlassDisplay(Scene scene, Entity cockpit, GpuMesh cube, Material on, Material ghost, Material jump) {
+  GlassDisplay(Scene scene, Entity cockpit, GpuMesh cube, Material on, Material ghost, Material jump,
+      Material battery) {
+    this.batteryLight = battery;
+    this.batteryColor.set(battery.emissive);
     this.jumpLight = jump;
     this.jumpColor.set(jump.emissive);
     final var left = new Panel(cockpit, -READOUT_DEGREES);
@@ -90,6 +98,15 @@ final class GlassDisplay {
       chevron.transform().rotation().rotateZ((float) Math.toRadians(k * 40));
     }
     cells(scene, right, cube, jump, ghost, JUMP_CELLS, 0f, this.jumpCells, bar);
+    // under it, the gun's battery: a bolt, then its bar (like the speed's, across from it)
+    final float below = -DIGIT_HEIGHT * 0.95f;
+    for (int k = -1; k <= 1; k += 2) {
+      final var bolt = add(scene, right, cube, battery,
+          new Vector3f(-bar / 2f - DIGIT_HEIGHT * 0.24f + k * DIGIT_HEIGHT * 0.03f, below + k * DIGIT_HEIGHT * 0.08f, 0f),
+          new Vector3f(STROKE / 2f, DIGIT_HEIGHT * 0.1f, 0.001f));
+      bolt.transform().rotation().rotateZ((float) Math.toRadians(-25));
+    }
+    cells(scene, right, cube, battery, ghost, BATTERY_CELLS, below, this.batteryCells, bar);
     // the ring: dashes round the crosshair, straight ahead
     for (int i = 0; i < RING_DASHES; i++) {
       final double a = 2 * Math.PI * i / RING_DASHES;
@@ -168,9 +185,10 @@ final class GlassDisplay {
 
   /**
    * Shows {@code speed} (and how much of {@code maxSpeed} it is) and the jump's charge: {@code charge} from 0 just
-   * after a jump to 1 when the next is ready, when the bar pulses ({@code time} in seconds).
+   * after a jump to 1 when the next is ready, when the bar pulses ({@code time} in seconds). {@code battery} is what is
+   * left in the gun's battery, 0 to 1: its bar turns from teal to red as it runs low, and blinks when it is flat.
    */
-  void show(float speed, float maxSpeed, float charge, float time) {
+  void show(float speed, float maxSpeed, float charge, float battery, float time) {
     final int value = Math.max(0, Math.min(999, Math.round(speed)));
     final int[] lights = segments(value);
     for (int i = 0; i < SPEED_DIGITS; i++) {
@@ -188,7 +206,19 @@ final class GlassDisplay {
     }
     final float pulse = charge >= 1f ? 0.75f + 0.25f * (float) Math.sin(time * 5f) : 0.55f;
     this.jumpLight.emissive.set(this.jumpColor).mul(pulse);
+    final int batteryLit = (int) Math.ceil(BATTERY_CELLS * Math.max(0f, Math.min(1f, battery)) - 1e-3f);
+    for (int i = 0; i < BATTERY_CELLS; i++) {
+      light(this.batteryCells.get(i), i < batteryLit);
+    }
+    final float low = Math.max(0f, Math.min(1f, 1f - battery / 0.4f)); // red below 40%
+    this.batteryLight.emissive.set(this.batteryColor).lerp(LOW_BATTERY, low);
+    if (batteryLit == 0) {
+      this.batteryLight.emissive.mul((int) (time * 6) % 2 == 0 ? 1f : 0.3f); // the bolt blinks
+    }
   }
+
+  /** The battery bar's colour when it is nearly flat. */
+  private static final Vector3f LOW_BATTERY = new Vector3f(1.5f, 0.2f, 0.12f);
 
   /** The segments each of the {@link #SPEED_DIGITS} digits lights for {@code value}: no leading zeros. */
   static int[] segments(int value) {

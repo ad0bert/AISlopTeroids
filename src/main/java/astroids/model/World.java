@@ -13,7 +13,10 @@ import org.joml.Vector3f;
  * "boss").
  *
  * <ul>
- * <li>A big asteroid that is hit splits into two small ones; a small one is destroyed.</li>
+ * <li>A big asteroid that is hit splits into two small ones; a small one is destroyed. Asteroids that meet bounce off
+ * each other.</li>
+ * <li>Every shot takes a charge from the gun's battery; it recharges only after fire has been let go for a moment, so
+ * holding fire runs it flat.</li>
  * <li>The enemy ship shoots at the player, takes a few hits, and leaves after a while. It comes a little more often with
  * every wave; from a later wave on, it may be a scout instead: small, quick, one hit, and it may swerve out of a shot's
  * way.</li>
@@ -33,7 +36,7 @@ public final class World {
   public static final float SHIP_RADIUS = 1f;
   public static final float BULLET_RADIUS = 0.3f;
   public static final float BOSS_RADIUS = 2.4f;
-  public static final float SCOUT_RADIUS = 1.44f;
+  public static final float SCOUT_RADIUS = 1.728f;
   /** A scout notices player shots this close (and heading its way). */
   static final float DODGE_RANGE = 18f;
 
@@ -71,6 +74,7 @@ public final class World {
   public static World newGame(long seed, Tuning tuning) {
     final var w = new World(seed, true, tuning);
     w.ship.invulnerable = tuning.shieldTime; // like a respawned ship: the first rocks may already be heading its way
+    w.ship.battery = tuning.batteryShots;
     w.startWave(1);
     return w;
   }
@@ -147,6 +151,7 @@ public final class World {
       a.position.fma(dt, a.velocity);
       wrap(a.position);
     }
+    bounceAsteroids();
     stepBoss(dt);
     for (int i = this.bullets.size() - 1; i >= 0; i--) {
       final var b = this.bullets.get(i);
@@ -173,6 +178,7 @@ public final class World {
         s.position.zero();
         s.velocity.zero();
         s.invulnerable = this.t.shieldTime;
+        s.battery = this.t.batteryShots;
         this.events.add(new GameEvent.ShipRespawned());
       }
       return;
@@ -202,8 +208,21 @@ public final class World {
     wrap(s.position);
 
     s.fireCooldown -= dt;
-    if (c.fire() && s.fireCooldown <= 0f) {
+    if (!c.fire()) {
+      // the battery charges only once the trigger has been let go for a moment
+      s.rechargeIn -= dt;
+      if (s.rechargeIn <= 0f) {
+        s.battery = Math.min(this.t.batteryShots, s.battery + this.t.batteryRecharge * dt);
+      }
+    } else {
+      s.rechargeIn = this.t.rechargeDelay;
+    }
+    if (c.fire() && s.fireCooldown <= 0f && s.battery < 1f) {
       s.fireCooldown = this.t.fireInterval;
+      this.events.add(new GameEvent.BatteryEmpty());
+    } else if (c.fire() && s.fireCooldown <= 0f) {
+      s.fireCooldown = this.t.fireInterval;
+      s.battery -= 1f;
       final var aim = this.tmp.set(c.aim()).normalize();
       final var b = new Bullet(false);
       b.position.set(s.position).fma(SHIP_RADIUS + 0.5f, aim);
@@ -295,6 +314,74 @@ public final class World {
     }
   }
 
+  /**
+   * Rocks that touch bounce off each other like billiard balls: weighed by their volume, so a small one glances off a
+   * big one, and pushed apart until they no longer overlap.
+   */
+  private void bounceAsteroids() {
+    final var normal = this.tmp;
+    for (int i = 0; i < this.asteroids.size(); i++) {
+      final var a = this.asteroids.get(i);
+      for (int j = i + 1; j < this.asteroids.size(); j++) {
+        final var b = this.asteroids.get(j);
+        final float reach = a.radius() + b.radius();
+        delta(a.position, b.position, normal);
+        final float d2 = normal.lengthSquared();
+        if (d2 > reach * reach) {
+          continue;
+        }
+        final float d = (float) Math.sqrt(d2);
+        if (d < 1e-4f) {
+          randomDirection(normal);
+        } else {
+          normal.div(d);
+        }
+        final float ma = a.radius() * a.radius() * a.radius();
+        final float mb = b.radius() * b.radius() * b.radius();
+        // apart, each by its share of the overlap
+        final float overlap = reach - d;
+        a.position.fma(-overlap * mb / (ma + mb), normal);
+        b.position.fma(overlap * ma / (ma + mb), normal);
+        wrap(a.position);
+        wrap(b.position);
+        // only if they are closing in: the speed along the line between them is exchanged
+        final float closing = this.tmp2.set(a.velocity).sub(b.velocity).dot(normal);
+        if (closing <= 0f) {
+          continue;
+        }
+        // rock is not rubber: most of the speed along the line between them is lost in the knock
+        final float impulse = (1f + this.t.rockBounce) * closing / (ma + mb);
+        a.velocity.fma(-impulse * mb, normal);
+        b.velocity.fma(impulse * ma, normal);
+        // and they scrape: part of their sliding past each other is lost too, and turned into a new tumble
+        final var slide = this.tmp2.set(a.velocity).sub(b.velocity).fma(-a.velocity.dot(normal)
+            + b.velocity.dot(normal), normal);
+        final float grip = Math.min(1f, this.t.rockFriction * impulse * (ma + mb) / Math.max(1e-4f, slide.length()));
+        a.velocity.fma(-grip * mb / (ma + mb), slide);
+        b.velocity.fma(grip * ma / (ma + mb), slide);
+        tumble(a, normal, slide, grip * mb / (ma + mb));
+        tumble(b, normal, slide, grip * ma / (ma + mb));
+        this.events.add(new GameEvent.AsteroidsBumped(
+            new Vector3f(a.position).fma(a.radius(), normal), Math.min(1f, closing / this.t.rockMaxSpeed)));
+      }
+    }
+  }
+
+  /**
+   * A rock scraped along its surface (at {@code normal}, by {@code slide} relative to the other, of which it took
+   * {@code share}) is set spinning about the axis across both, on top of the tumble it had.
+   */
+  private static void tumble(Asteroid r, Vector3f normal, Vector3f slide, float share) {
+    final var spin = new Vector3f(r.spinAxis).mul(r.spinSpeed);
+    // the scrape pulls back on the touching side (at +normal for one rock, -normal for the other: the same turn)
+    spin.add(new Vector3f(normal).cross(slide).mul(-share * 0.6f / r.radius()));
+    final float speed = spin.length();
+    if (speed > 1e-4f) {
+      r.spinAxis.set(spin).div(speed);
+      r.spinSpeed = Math.min(3f, speed);
+    }
+  }
+
   private void collide() {
     // bullets against what they can hit
     for (int i = this.bullets.size() - 1; i >= 0; i--) {
@@ -359,9 +446,13 @@ public final class World {
 
   private void spawnBig() {
     final var a = new Asteroid(Asteroid.Size.BIG);
+    int tries = 0;
     do {
       a.position.set(between(-arena(), arena()), between(-arena(), arena()), between(-arena(), arena()));
-    } while (this.ship != null && distance(a.position, this.ship.position) < this.t.safeDistance);
+      tries++;
+    } while (this.ship != null && distance(a.position, this.ship.position) < this.t.safeDistance
+        // clear of the other rocks too, if there is room: else they bounce apart at once
+        || tries < 50 && asteroidAt(a.position, a.radius()) != null);
     randomDirection(a.velocity).mul(between(this.t.rockMinSpeed, this.t.rockMaxSpeed)
         + this.t.rockSpeedPerWave * Math.max(0, this.wave - 1));
     decorate(a);

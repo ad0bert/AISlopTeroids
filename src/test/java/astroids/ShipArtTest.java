@@ -119,8 +119,8 @@ class ShipArtTest {
   }
 
   @Test
-  void theEnemyShipsAreAFifthBiggerThanBefore() {
+  void theEnemyShipsAreAFifthBiggerThanBeforeAndTheScoutAFifthMoreAgain() {
     assertEquals(2.4f, World.BOSS_RADIUS, 1e-6f);
-    assertEquals(1.44f, World.SCOUT_RADIUS, 1e-6f);
+    assertEquals(1.2f * 1.44f, World.SCOUT_RADIUS, 1e-6f);
   }
 }

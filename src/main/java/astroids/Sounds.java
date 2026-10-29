@@ -52,6 +52,35 @@ final class Sounds {
     return AudioData.mono(RATE, out);
   }
 
+  /** Rock on rock: a dull, low knock with a little grit. */
+  static AudioData knock() {
+    final int n = (int) (RATE * 0.25f);
+    final float[] out = new float[n];
+    final var rnd = new Random(4L);
+    float lp = 0f;
+    double phase = 0;
+    for (int i = 0; i < n; i++) {
+      final float t = (float) i / RATE;
+      lp += 0.08f * ((rnd.nextFloat() * 2f - 1f) - lp);
+      phase += 2 * Math.PI * (95 - 40 * t / 0.25f) / RATE;
+      out[i] = (0.7f * (float) Math.sin(phase) + 1.2f * lp) * (float) Math.exp(-t * 22) * attack(i, 25);
+    }
+    return AudioData.mono(RATE, out);
+  }
+
+  /** The gun with a flat battery: a short, dry buzz instead of a shot. */
+  static AudioData empty() {
+    final int n = (int) (RATE * 0.07f);
+    final float[] out = new float[n];
+    for (int i = 0; i < n; i++) {
+      final float u = (float) i / n;
+      final double t = (double) i / RATE;
+      final float square = Math.sin(2 * Math.PI * 180 * t) >= 0 ? 1f : -1f;
+      out[i] = 0.18f * square * (1f - u) * attack(i, 20);
+    }
+    return AudioData.mono(RATE, out);
+  }
+
   /** Two alternating tones: the boss has arrived. */
   static AudioData alarm() {
     final int n = (int) (RATE * 0.9f);

@@ -17,6 +17,14 @@ public sealed interface GameEvent {
   record AsteroidDestroyed(Vector3f position, Asteroid.Size size, Vector3f velocity) implements GameEvent {
   }
 
+  /** Two rocks bounced off each other, here; {@code strength} is from 0 (a graze) to 1 (head-on at full speed). */
+  record AsteroidsBumped(Vector3f position, float strength) implements GameEvent {
+  }
+
+  /** Fire was held with the gun's battery flat: nothing came out. */
+  record BatteryEmpty() implements GameEvent {
+  }
+
   record BossAppeared(Vector3f position, Boss.Kind kind) implements GameEvent {
   }
 

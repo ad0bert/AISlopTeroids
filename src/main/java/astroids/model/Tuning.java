@@ -47,6 +47,9 @@ public final class Tuning {
   public float bulletSpeed = 70f;
   public float bulletTime = 1.1f;
   public float fireInterval = 0.16f;
+  public int batteryShots = 35;
+  public float batteryRecharge = 7.5f;
+  public float rechargeDelay = 0.35f;
   // asteroids and waves
   public int firstWaveRocks = 10;
   public int maxRocks = 120;
@@ -55,6 +58,8 @@ public final class Tuning {
   public float rockSpeedPerWave = 0.4f;
   public float splitMinSpeed = 4f;
   public float splitMaxSpeed = 7f;
+  public float rockBounce = 0.35f;
+  public float rockFriction = 0.3f;
   public float safeDistance = 25f;
   public float waveDelay = 2.5f;
   // the enemy ship
@@ -132,6 +137,11 @@ public final class Tuning {
     f("gun.bulletTime", "seconds a shot flies", 0.1f, t -> t.bulletTime, (t, v) -> t.bulletTime = v.floatValue());
     f("gun.fireInterval", "seconds between shots when holding fire", 0.02f, t -> t.fireInterval,
         (t, v) -> t.fireInterval = v.floatValue());
+    i("gun.battery", "shots a full battery holds", 1, t -> t.batteryShots, (t, v) -> t.batteryShots = v.intValue());
+    f("gun.recharge", "shots' worth the battery recharges per second while fire is not held", 0.1f,
+        t -> t.batteryRecharge, (t, v) -> t.batteryRecharge = v.floatValue());
+    f("gun.rechargeDelay", "seconds after letting go of fire before the battery recharges", 0f, t -> t.rechargeDelay,
+        (t, v) -> t.rechargeDelay = v.floatValue());
     i("rocks.firstWave", "big rocks in wave 1; each wave has one more", 1, t -> t.firstWaveRocks,
         (t, v) -> t.firstWaveRocks = v.intValue());
     i("rocks.max", "most big rocks in a wave", 1, t -> t.maxRocks, (t, v) -> t.maxRocks = v.intValue());
@@ -145,6 +155,10 @@ public final class Tuning {
         (t, v) -> t.splitMinSpeed = v.floatValue());
     f("rocks.splitMaxSpeed", "fastest speed the halves of a split rock fly apart at", 0f, t -> t.splitMaxSpeed,
         (t, v) -> t.splitMaxSpeed = v.floatValue());
+    f("rocks.bounce", "how much of their closing speed two rocks keep when they knock together (0 = none, 1 = all)",
+        0f, 1f, t -> t.rockBounce, (t, v) -> t.rockBounce = v.floatValue());
+    f("rocks.friction", "how much rocks that knock together grip each other, slowing their sliding past (0 = none)",
+        0f, t -> t.rockFriction, (t, v) -> t.rockFriction = v.floatValue());
     f("rocks.safeDistance", "new rocks and the enemy ship appear at least this far from the ship", 0f,
         t -> t.safeDistance, (t, v) -> t.safeDistance = v.floatValue());
     f("waves.delay", "seconds between clearing a wave and the next", 0f, t -> t.waveDelay,

@@ -106,7 +106,8 @@ final class PlayState extends LevelState {
     this.cockpit.transform().setParent(this.camera.transform());
     engine.scene().add(this.cockpit);
     addParts(engine, this.cockpit, art.cockpitParts, false);
-    this.glass = new GlassDisplay(engine.scene(), this.cockpit, art.cube, art.holoOn, art.holoGhost, art.holoJump);
+    this.glass = new GlassDisplay(engine.scene(), this.cockpit, art.cube, art.holoOn, art.holoGhost, art.holoJump,
+        art.holoBattery);
     this.playerShip = new Entity("player ship");
     engine.scene().add(this.playerShip);
     addParts(engine, this.playerShip, art.playerParts, true);
@@ -164,7 +165,7 @@ final class PlayState extends LevelState {
     boolean jump = input.wasActionPressed("hyperspace");
     if (this.autopilot) {
       this.thrust.set(this.forward).mul(0.3f);
-      fire = true;
+      fire = this.time % 9f < 5f; // in bursts, letting the battery recharge
       jump = this.time > 4f && this.world.ship().hyperspaceCooldown <= 0f; // shows the jump in smoke runs
     }
     this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire, jump, brake));
@@ -262,7 +263,8 @@ final class PlayState extends LevelState {
         ship.alive && !shown.firstPerson(), this.game.art().quality, dt);
     final var tuning = this.world.tuning();
     this.glass.show(ship.velocity.length(), tuning.shipMaxSpeed,
-        1f - ship.hyperspaceCooldown / Math.max(1e-3f, tuning.hyperspaceCooldown), this.time);
+        1f - ship.hyperspaceCooldown / Math.max(1e-3f, tuning.hyperspaceCooldown),
+        ship.battery / tuning.batteryShots, this.time);
     final var guns = new Vector3f[shown.firstPerson() ? Art.COCKPIT_GUNS.length : Art.PLAYER_GUNS.length];
     for (int i = 0; i < guns.length; i++) {
       guns[i] = shown.firstPerson() ? view.rotation().transform(new Vector3f(Art.COCKPIT_GUNS[i])).add(p)
@@ -399,6 +401,23 @@ final class PlayState extends LevelState {
         Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.62f, 0.7f, 1f);
       } else {
         Hud.text(ui, jump, jumpX, bottom, 1.1f, 0.6f, 0.85f, 1f, 1f);
+      }
+      // the gun's battery: a bar of blocks over a faint full-length one, so it keeps its length; red and blinking once
+      // it is flat
+      final float charge = ship.battery / this.world.tuning().batteryShots;
+      final int blocks = Math.round(10 * charge);
+      final float laserX = jumpX + Hud.width(ui, "JUMP READY  (E)", 1.1f) + 30f;
+      final float barX = laserX + Hud.width(ui, "LASER ", 1.1f);
+      final boolean flat = ship.battery < 1f;
+      final boolean low = charge < 0.25f;
+      final float r = flat || low ? 1f : 0.6f;
+      final float g = flat ? 0.3f : low ? 0.7f : 0.85f;
+      final float b = flat ? 0.25f : low ? 0.3f : 1f;
+      final float a = flat && (int) (this.time * 6) % 2 != 0 ? 0.4f : 1f;
+      Hud.text(ui, "LASER", laserX, bottom, 1.1f, r, g, b, a);
+      Hud.text(ui, "█".repeat(10), barX, bottom, 1.1f, r, g, b, 0.2f);
+      if (blocks > 0) {
+        Hud.text(ui, "█".repeat(blocks), barX, bottom, 1.1f, r, g, b, a);
       }
     }
 

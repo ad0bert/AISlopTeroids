@@ -102,6 +102,63 @@ class WorldTest {
   }
 
   @Test
+  void holdingFireRunsTheBatteryFlatAndOnlyLettingGoRechargesIt() {
+    final var w = empty();
+    assertEquals(T.batteryShots, w.ship().battery);
+    final var fire = fireAt(new Vector3f(1f, 0f, 0f));
+    run(w, T.fireInterval * (T.batteryShots + 5), fire);
+    final long shots = w.drainEvents().stream().filter(e -> e instanceof GameEvent.Shot).count();
+    assertEquals(T.batteryShots, shots, "a full battery's worth, then nothing");
+    run(w, 0.5f, fire);
+    final var events = w.drainEvents();
+    assertTrue(events.stream().noneMatch(e -> e instanceof GameEvent.Shot), "still flat while fire is held");
+    assertTrue(events.stream().anyMatch(e -> e instanceof GameEvent.BatteryEmpty), "the gun says so");
+
+    run(w, T.rechargeDelay + T.batteryShots / T.batteryRecharge + 0.1f, Controls.NONE);
+    assertEquals(T.batteryShots, w.ship().battery, 1e-3f, "let go: it charges up again");
+  }
+
+  @Test
+  void tappingFireDoesNotLetTheBatteryRecharge() {
+    final var w = empty();
+    final var fire = fireAt(new Vector3f(1f, 0f, 0f));
+    for (int i = 0; i < T.batteryShots + 5; i++) {
+      w.step(DT, fire);
+      run(w, T.fireInterval, Controls.NONE); // let go, but not for long
+    }
+    assertTrue(w.ship().battery < 1f);
+  }
+
+  @Test
+  void asteroidsThatMeetBounceOffEachOther() {
+    final var w = empty();
+    final var a = w.addAsteroid(Asteroid.Size.BIG, new Vector3f(-12f, 0f, -40f), new Vector3f(10f, 0f, 0f));
+    final var b = w.addAsteroid(Asteroid.Size.BIG, new Vector3f(12f, 0f, -40f), new Vector3f(-10f, 0f, 0f));
+    run(w, 2f, Controls.NONE);
+    assertEquals(-10f * T.rockBounce, a.velocity.x, 1e-3f, "equal rocks head-on: they part, but much slower");
+    assertEquals(10f * T.rockBounce, b.velocity.x, 1e-3f);
+    assertTrue(dist(a.position, b.position) >= 2 * World.BIG_RADIUS - 1e-3f, "not inside each other");
+    assertEquals(1, w.drainEvents().stream().filter(e -> e instanceof GameEvent.AsteroidsBumped).count());
+
+    // a small one knocks into a big one, off-centre: momentum is kept, much of the energy is not
+    final var w2 = empty();
+    final var big = w2.addAsteroid(Asteroid.Size.BIG, new Vector3f(0f, 0f, -40f), new Vector3f());
+    final var small = w2.addAsteroid(Asteroid.Size.SMALL, new Vector3f(-12f, 3f, -40f), new Vector3f(10f, 0f, 0f));
+    final float spin = big.spinSpeed;
+    final var spinAxis = new Vector3f(big.spinAxis);
+    run(w2, 2f, Controls.NONE);
+    assertTrue(big.velocity.x > 0f && big.velocity.x < 3f, "the big one was nudged");
+    // masses as volumes: small = 1, big = 8
+    final var momentum = new Vector3f(small.velocity).fma(8f, big.velocity);
+    assertEquals(10f, momentum.x, 1e-3f, "momentum is kept");
+    assertEquals(0f, momentum.y, 1e-3f);
+    final float before = 0.5f * 100f;
+    final float after = 0.5f * small.velocity.lengthSquared() + 0.5f * 8f * big.velocity.lengthSquared();
+    assertTrue(after < 0.8f * before, "rock is not rubber: energy " + after + " of " + before);
+    assertTrue(big.spinSpeed != spin || !big.spinAxis.equals(spinAxis, 1e-4f), "the scrape set it tumbling anew");
+  }
+
+  @Test
   void touchingAnAsteroidCostsALifeAndTheShipComesBackProtected() {
     final var w = empty();
     w.addAsteroid(Asteroid.Size.SMALL, new Vector3f(0f, 0f, -3f), new Vector3f(0f, 0f, 10f));

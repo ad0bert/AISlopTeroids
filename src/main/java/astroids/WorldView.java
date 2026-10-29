@@ -84,12 +84,12 @@ final class WorldView {
         if (fade <= 0f) {
           this.fromGun.remove(b);
           e.transform().rotation().rotationTo(FORWARD, this.tmp.set(b.velocity).normalize());
-          e.transform().scale().set(0.12f, 0.12f, 1.1f);
+          e.transform().scale().set(BOLT_WIDTH, BOLT_WIDTH, BOLT_LENGTH);
         } else {
           e.transform().position().fma(fade, offset);
           // thin as it leaves the gun, right under the viewer's nose, and full size where it joins its line
           final float s = 1f - 0.75f * fade;
-          e.transform().scale().set(0.12f * s, 0.12f * s, 1.1f * s);
+          e.transform().scale().set(BOLT_WIDTH * s, BOLT_WIDTH * s, BOLT_LENGTH * s);
           // heading for its line as well as along it
           e.transform().rotation().rotationTo(FORWARD,
               this.tmp.set(offset).mul(-1f / CONVERGE).add(b.velocity).normalize());
@@ -153,13 +153,29 @@ final class WorldView {
     return e;
   }
 
+  /** Half the width and half the length of the white-hot core of a player's laser bolt. */
+  static final float BOLT_WIDTH = 0.05f;
+  static final float BOLT_LENGTH = 1.6f;
+
+  /**
+   * A shot: a white-hot core stretched along its flight, in a wider, slightly longer sheath of coloured light. The
+   * player's are long thin laser bolts; the enemy's are shorter, fatter blobs of plasma, slower and easier to see.
+   */
   private Entity newBullet(Bullet b) {
     final var e = new Entity(b.fromBoss ? "boss shot" : "shot");
-    e.add(new MeshRenderer(this.art.ball, b.fromBoss ? this.art.bossShotMaterial : this.art.shotMaterial));
-    // stretched along its flight
-    e.transform().scale().set(b.fromBoss ? 0.35f : 0.12f, b.fromBoss ? 0.35f : 0.12f, b.fromBoss ? 0.7f : 1.1f);
+    e.add(new MeshRenderer(this.art.ball, b.fromBoss ? this.art.bossShotMaterial : this.art.shotMaterial))
+        .castShadows = false;
+    e.transform().scale().set(b.fromBoss ? 0.2f : BOLT_WIDTH, b.fromBoss ? 0.2f : BOLT_WIDTH,
+        b.fromBoss ? 0.45f : BOLT_LENGTH);
     e.transform().rotation().rotationTo(FORWARD, this.tmp.set(b.velocity).normalize());
     shown(b.position, e.transform().position());
+    final var glow = new Entity(e.name() + " glow");
+    glow.add(new MeshRenderer(this.art.smoothBall, b.fromBoss ? this.art.bossShotGlow : this.art.shotGlow))
+        .castShadows = false;
+    glow.transform().scale().set(b.fromBoss ? 2.4f : 3.6f, b.fromBoss ? 2.4f : 3.6f, b.fromBoss ? 1.8f : 1.12f);
+    glow.transform().setParent(e.transform());
+    this.scene.add(glow);
+    this.attached.computeIfAbsent(e, k -> new ArrayList<>()).add(glow);
     if (!b.fromBoss) {
       // drawn from the gun whose turn it is; the model has it on the line through the crosshair
       final var gun = this.guns[this.nextGun];
@@ -230,6 +246,15 @@ final class WorldView {
             scout ? this.art.scoutHull : this.art.bossHull, scout ? this.art.scoutFin : this.art.bossPaint,
             scout ? 5 : 7, scout ? 12 : 18, scout ? 18 : 28);
       }
+      case GameEvent.AsteroidsBumped b -> {
+        if (b.strength() > 0.08f) {
+          sound(this.art.rockBump, b.position(), 0.3f + 0.7f * b.strength(), 0.8f + 0.4f * this.random.nextFloat());
+        }
+        if (b.strength() > 0.3f) { // grit scraped off where they met
+          sparks(shown(b.position(), new Vector3f()), new Vector3f(), this.art.quality.scale(4), 0.05f, 9f);
+        }
+      }
+      case GameEvent.BatteryEmpty e -> audio.play2D(this.art.empty, 0.5f, AudioBus.EFFECTS);
       case GameEvent.BossAppeared a -> audio.play2D(this.art.alarm, 0.8f, AudioBus.EFFECTS);
       case GameEvent.ShipDestroyed d -> {
         audio.play2D(this.art.shipBoom, 1f, AudioBus.EFFECTS);

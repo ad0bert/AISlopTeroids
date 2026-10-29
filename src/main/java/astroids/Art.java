@@ -49,8 +49,12 @@ final class Art {
 
   final Material rockMaterial = new Material().color(0.62f, 0.58f, 0.54f, 1f);
   final Material smallRockMaterial = new Material().color(0.74f, 0.64f, 0.54f, 1f);
-  final Material shotMaterial = glowing(1.8f, 1.5f, 0.5f);
-  final Material bossShotMaterial = glowing(2.2f, 0.25f, 0.7f);
+  // the shots: laser bolts, a white-hot core in a sheath of coloured light (amber for the player, magenta for the
+  // enemy), so they bloom like light rather than look like solid sticks
+  final Material shotMaterial = glowing(3.2f, 2.9f, 2.2f);
+  final Material shotGlow = holo(1.5f, 0.75f, 0.12f);
+  final Material bossShotMaterial = glowing(3f, 1.4f, 2.2f);
+  final Material bossShotGlow = holo(1.4f, 0.08f, 0.55f);
   // the enemy ships: polished metal that reflects the space around it, glossy paint, glowing glass and lights
   final Material bossHull = new Material().color(0.92f, 0.93f, 0.96f, 1f).pbr(0.85f, 0.28f);
   // the player's ship: worn chrome and teal paint, the colour of the HUD
@@ -76,6 +80,8 @@ final class Art {
   final Material holoOn = holo(0.25f, 1.3f, 1.0f);
   final Material holoGhost = holo(0.02f, 0.09f, 0.07f);
   final Material holoJump = holo(0.3f, 1.1f, 1.3f);
+  /** The gun's battery bar: teal like the rest while charged, turning red as it runs flat. */
+  final Material holoBattery = holo(0.25f, 1.3f, 1.0f);
   // the player's ship from outside (seen from behind it): its glass is glossy and dark, like the enemies' domes
   final Material playerDome = glass(0.04f, 0.16f, 0.15f, 0.02f, 0.09f, 0.08f);
 
@@ -121,6 +127,8 @@ final class Art {
   final AudioClip smallBoom;
   final AudioClip shipBoom;
   final AudioClip clang;
+  final AudioClip rockBump;
+  final AudioClip empty;
   final AudioClip alarm;
   final AudioClip chime;
   final AudioClip extraLife;
@@ -175,6 +183,8 @@ final class Art {
     this.smallBoom = res.sound("gen:small-boom", Sounds.explosion(0.45f, 2L));
     this.shipBoom = res.sound("gen:ship-boom", Sounds.explosion(1.6f, 3L));
     this.clang = res.sound("gen:clang", Sounds.clang());
+    this.rockBump = res.sound("gen:rock-bump", Sounds.knock());
+    this.empty = res.sound("gen:empty", Sounds.empty());
     this.alarm = res.sound("gen:alarm", Sounds.alarm());
     this.chime = res.sound("gen:chime", Sounds.chime());
     this.extraLife = res.sound("gen:extra-life", Sounds.extraLife());
