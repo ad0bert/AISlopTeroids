@@ -20,6 +20,7 @@ final class PauseState implements GameState {
   public void enter(Engine engine) {
     this.clicks = new Clicks(engine.input());
     engine.audio().mixer().setMuted(true);
+    this.game.rumble().stop();
   }
 
   @Override

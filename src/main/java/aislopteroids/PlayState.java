@@ -99,7 +99,7 @@ final class PlayState extends LevelState {
     }
     this.custom = this.game.loadTuning().custom();
     this.world = World.newGame(System.nanoTime(), this.game.tuning().tuning());
-    this.view = new WorldView(engine, this.game.art());
+    this.view = new WorldView(engine, this.game.art(), this.game.rumble());
     this.camera = this.game.art().addBackdrop(engine.scene());
     final var art = this.game.art();
     this.cockpit = new Entity("cockpit");
@@ -168,7 +168,10 @@ final class PlayState extends LevelState {
       fire = this.time % 9f < 5f; // in bursts, letting the battery recharge
       jump = this.time > 4f && this.world.ship().hyperspaceCooldown <= 0f; // shows the jump in smoke runs
     }
+    final var profiler = engine.profiler();
+    profiler.begin("World");
     this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire, jump, brake));
+    profiler.end();
     afterStep(engine, dt);
 
     if (!this.world.isGameOver()) {
@@ -212,6 +215,7 @@ final class PlayState extends LevelState {
 
   /** Brings the view up to date with the world and reacts to what happened. */
   private void afterStep(Engine engine, float dt) {
+    engine.profiler().begin("World view"); // in the F3 overlay, next to "World"
     final var ship = this.world.ship();
     final var events = this.world.drainEvents();
     final var view = this.camera.transform();
@@ -297,16 +301,19 @@ final class PlayState extends LevelState {
       }
       }
     }
+    engine.profiler().end();
   }
 
-  /** The engine hums louder and higher the faster the ship goes; the throb swells while an enemy ship is about. */
+  /**
+   * The engine hums only while it pushes (W, the stick), louder and higher the harder; drifting is silent. The throb
+   * swells while an enemy ship is about.
+   */
   private void followAmbience(float dt) {
     final var ship = this.world.ship();
-    final float speed = ship.alive && !this.world.isGameOver()
-        ? Math.min(1f, ship.velocity.length() / this.world.tuning().shipMaxSpeed) : -1f;
-    final float humTarget = speed < 0f ? 0f : 0.12f + 0.4f * speed;
-    this.hum.volume = approach(this.hum.volume, humTarget, dt * 1.5f);
-    this.hum.pitch = 0.8f + 0.5f * Math.max(0f, speed);
+    final float push = ship.alive && !this.world.isGameOver() ? Math.min(1f, this.thrust.dot(this.forward)) : 0f;
+    final float humTarget = push > 0f ? 0.12f + 0.4f * push : 0f;
+    this.hum.volume = approach(this.hum.volume, humTarget, dt * 4f); // quick to start and to die away
+    this.hum.pitch = 0.8f + 0.5f * push;
     final float dangerTarget = this.world.boss() != null && !this.world.isGameOver() ? 0.6f : 0f;
     this.danger.volume = approach(this.danger.volume, dangerTarget, dt * 0.5f);
   }

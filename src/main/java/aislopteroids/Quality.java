@@ -4,14 +4,14 @@ import engine.render.RenderSettings;
 
 /**
  * How much the graphics may cost, picked in the options for slower computers: the renderer's glow (bloom), edge
- * smoothing and exact blending of see-through things, and how many pieces, specks and sparks the bursts make and
- * whether explosions light up their surroundings. The sky's reflections are kept at every level: they are worked out
+ * smoothing, ambient occlusion (the shade in the rocks' craters and creases) and exact blending of see-through things,
+ * and how many pieces, specks and sparks the bursts make and whether explosions light up their surroundings. The sky's reflections are kept at every level: they are worked out
  * once at start and cost almost nothing per frame.
  */
 enum Quality {
-  LOW("Low", false, false, false, 0.35f, false),
-  MEDIUM("Medium", true, true, false, 0.6f, true),
-  HIGH("High", true, true, true, 1f, true);
+  LOW("Low", false, false, false, false, 0.35f, false),
+  MEDIUM("Medium", true, true, true, false, 0.6f, true),
+  HIGH("High", true, true, true, true, 1f, true);
 
   /** The bloom strength when glow is on (the engine's default). */
   static final float BLOOM = 0.08f;
@@ -19,17 +19,20 @@ enum Quality {
   final String label;
   final boolean bloom;
   final boolean antiAliasing;
+  /** The engine's screen-space ambient occlusion: less sky light in craters and creases. */
+  final boolean ambientOcclusion;
   final boolean exactBlending;
   /** The share of debris, dust, smoke, sparks and fire puffs that the bursts make. */
   final float effects;
   /** Whether an explosion lights up what is around it. */
   final boolean explosionLight;
 
-  Quality(String label, boolean bloom, boolean antiAliasing, boolean exactBlending, float effects,
-      boolean explosionLight) {
+  Quality(String label, boolean bloom, boolean antiAliasing, boolean ambientOcclusion, boolean exactBlending,
+      float effects, boolean explosionLight) {
     this.label = label;
     this.bloom = bloom;
     this.antiAliasing = antiAliasing;
+    this.ambientOcclusion = ambientOcclusion;
     this.exactBlending = exactBlending;
     this.effects = effects;
     this.explosionLight = explosionLight;
@@ -43,6 +46,7 @@ enum Quality {
   void apply(RenderSettings settings) {
     settings.bloomStrength = this.bloom ? BLOOM : 0f;
     settings.antiAliasing = this.antiAliasing;
+    settings.ambientOcclusion = this.ambientOcclusion;
     settings.orderIndependentTransparency = this.exactBlending;
   }
 

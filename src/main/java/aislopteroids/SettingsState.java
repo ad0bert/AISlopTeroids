@@ -6,7 +6,8 @@ import engine.render.UiCanvas;
 import engine.ui.Gui;
 
 /**
- * The options panel, opened with O from the title screen or the pause menu: mouse sensitivity, inverted look, volumes,
+ * The options panel, opened with O from the title screen or the pause menu: mouse sensitivity, inverted look, gamepad
+ * rumble, volumes,
  * fullscreen, vsync, graphics quality, the radar and the view. Changes take effect at once and are saved when the
  * panel closes (Done, or O again).
  */
@@ -75,7 +76,9 @@ final class SettingsState implements GameState {
     g.label("Controls");
     o.mouseSensitivity = g.slider("Mouse sensitivity", o.mouseSensitivity, Options.MIN_SENSITIVITY,
         Options.MAX_SENSITIVITY);
+    g.row(2);
     o.invertY = g.checkbox("Invert mouse Y", o.invertY);
+    o.rumble = g.checkbox("Gamepad rumble", o.rumble);
     g.space(6f * Hud.zoom());
     g.label("Sound");
     o.masterVolume = g.slider("Volume", o.masterVolume, 0f, 1f);
