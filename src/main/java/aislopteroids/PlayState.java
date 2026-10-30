@@ -99,7 +99,7 @@ final class PlayState extends LevelState {
     }
     this.custom = this.game.loadTuning().custom();
     this.world = World.newGame(System.nanoTime(), this.game.tuning().tuning());
-    this.view = new WorldView(engine, this.game.art());
+    this.view = new WorldView(engine, this.game.art(), this.game.rumble());
     this.camera = this.game.art().addBackdrop(engine.scene());
     final var art = this.game.art();
     this.cockpit = new Entity("cockpit");
@@ -168,7 +168,10 @@ final class PlayState extends LevelState {
       fire = this.time % 9f < 5f; // in bursts, letting the battery recharge
       jump = this.time > 4f && this.world.ship().hyperspaceCooldown <= 0f; // shows the jump in smoke runs
     }
+    final var profiler = engine.profiler();
+    profiler.begin("World");
     this.world.step(dt, new Controls(new Vector3f(this.thrust), new Vector3f(this.forward), fire, jump, brake));
+    profiler.end();
     afterStep(engine, dt);
 
     if (!this.world.isGameOver()) {
@@ -212,6 +215,7 @@ final class PlayState extends LevelState {
 
   /** Brings the view up to date with the world and reacts to what happened. */
   private void afterStep(Engine engine, float dt) {
+    engine.profiler().begin("World view"); // in the F3 overlay, next to "World"
     final var ship = this.world.ship();
     final var events = this.world.drainEvents();
     final var view = this.camera.transform();
@@ -297,6 +301,7 @@ final class PlayState extends LevelState {
       }
       }
     }
+    engine.profiler().end();
   }
 
   /** The engine hums louder and higher the faster the ship goes; the throb swells while an enemy ship is about. */

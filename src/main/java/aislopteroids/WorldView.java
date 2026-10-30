@@ -34,6 +34,7 @@ import engine.render.MeshRenderer;
 final class WorldView {
   private final Engine engine;
   private final Art art;
+  private final Rumble rumble;
   private final Scene scene;
   private final Map<Object, Entity> entities = new IdentityHashMap<>();
   private final Map<Object, Boolean> seen = new IdentityHashMap<>();
@@ -57,16 +58,20 @@ final class WorldView {
   /** How far each of the player's shots was from its gun when it appeared: drawn there, then less and less. */
   private final Map<Bullet, Vector3f> fromGun = new IdentityHashMap<>();
   private float bulletTime = new aislopteroids.model.Tuning().bulletTime;
+  /** Seconds the world has been shown (the clock for the rumble). */
+  private float time;
 
-  WorldView(Engine engine, Art art) {
+  WorldView(Engine engine, Art art, Rumble rumble) {
     this.engine = engine;
     this.art = art;
+    this.rumble = rumble;
     this.scene = engine.scene();
   }
 
   /** Moves the entities to the model's state, as seen from {@code viewer}. Call after every world step. */
   void sync(World world, Vector3f viewerPosition, float dt) {
     this.viewer.set(viewerPosition);
+    this.time += dt;
     this.arena = world.arena();
     this.seen.clear();
     for (Asteroid a : world.asteroids()) {
@@ -221,17 +226,21 @@ final class WorldView {
     return e;
   }
 
-  /** Sounds and debris for what happened in the last step; call after {@link #sync}. */
+  /** Sounds, debris and gamepad rumble for what happened in the last step; call after {@link #sync}. */
   void play(Iterable<GameEvent> events) {
     final var audio = this.engine.audio();
     for (GameEvent event : events) {
       switch (event) {
-      case GameEvent.Shot s -> audio.play2D(this.art.shot, 0.45f, AudioBus.EFFECTS);
+      case GameEvent.Shot s -> {
+        audio.play2D(this.art.shot, 0.45f, AudioBus.EFFECTS);
+        this.rumble.shake(0f, 0.15f, 0.06f, this.time);
+      }
       case GameEvent.BossShot s -> sound(this.art.bossShot, s.position(), 1f, 1f);
       case GameEvent.AsteroidDestroyed d -> {
         final boolean big = d.size() == Asteroid.Size.BIG;
         sound(big ? this.art.bigBoom : this.art.smallBoom, d.position(), 1f, 0.9f + 0.2f * this.random.nextFloat());
         rockBurst(d.position(), d.velocity(), big);
+        shakeFrom(d.position(), big ? 0.55f : 0.3f, big ? 0.3f : 0.2f);
       }
       case GameEvent.BossHit h -> {
         sound(this.art.clang, h.position(), 1f, 1f);
@@ -245,6 +254,7 @@ final class WorldView {
         shipBurst(shown(d.position(), new Vector3f()), d.velocity(), d.kind().radius,
             scout ? this.art.scoutHull : this.art.bossHull, scout ? this.art.scoutFin : this.art.bossPaint,
             scout ? 5 : 7, scout ? 12 : 18, scout ? 18 : 28);
+        shakeFrom(d.position(), scout ? 0.7f : 0.9f, 0.5f);
       }
       case GameEvent.AsteroidsBumped b -> {
         if (b.strength() > 0.08f) {
@@ -260,6 +270,7 @@ final class WorldView {
         audio.play2D(this.art.shipBoom, 1f, AudioBus.EFFECTS);
         shipBurst(shown(d.position(), new Vector3f()), new Vector3f(), PLAYER_SIZE, this.art.playerHull,
             this.art.playerPaint, 6, 16, 24);
+        this.rumble.shake(1f, 0.8f, 0.7f, this.time);
       }
       case GameEvent.WaveStarted w -> audio.play2D(this.art.chime, 0.7f, AudioBus.EFFECTS);
       case GameEvent.BossLeft l -> {
@@ -269,8 +280,19 @@ final class WorldView {
       case GameEvent.GameOver g -> {
       }
       case GameEvent.ExtraLife l -> audio.play2D(this.art.extraLife, 0.8f, AudioBus.EFFECTS);
-      case GameEvent.Hyperspace h -> audio.play2D(this.art.warp, 0.9f, AudioBus.EFFECTS);
+      case GameEvent.Hyperspace h -> {
+        audio.play2D(this.art.warp, 0.9f, AudioBus.EFFECTS);
+        this.rumble.shake(0.25f, 0.6f, 0.3f, this.time);
       }
+      }
+    }
+  }
+
+  /** Shakes the pads for an explosion at {@code position}: {@code strength} right by the viewer, less further away. */
+  private void shakeFrom(Vector3f position, float strength, float seconds) {
+    final float near = Rumble.nearness(shown(position, new Vector3f()).distance(this.viewer));
+    if (near > 0.02f) {
+      this.rumble.shake(strength * near, 0.6f * strength * near, seconds, this.time);
     }
   }
 

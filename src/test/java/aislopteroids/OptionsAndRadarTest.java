@@ -24,11 +24,13 @@ class OptionsAndRadarTest {
     final var first = Options.load(Settings.load(file), false, true);
     assertEquals(Options.DEFAULT_SENSITIVITY, first.mouseSensitivity);
     assertFalse(first.invertY);
+    assertTrue(first.rumble);
     assertTrue(first.radar);
     assertTrue(first.vsync, "the window's state is the default");
 
     first.mouseSensitivity = 0.2f;
     first.invertY = true;
+    first.rumble = false;
     first.masterVolume = 0.4f;
     first.radar = false;
     first.fullscreen = true;
@@ -39,6 +41,7 @@ class OptionsAndRadarTest {
     final var again = Options.load(Settings.load(file), false, true);
     assertEquals(0.2f, again.mouseSensitivity, 1e-6f);
     assertTrue(again.invertY);
+    assertFalse(again.rumble);
     assertEquals(0.4f, again.masterVolume, 1e-6f);
     assertFalse(again.radar);
     assertTrue(again.fullscreen, "the saved choice wins over the window's state");

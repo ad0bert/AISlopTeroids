@@ -36,7 +36,7 @@ final class TitleState extends LevelState {
   @Override
   protected void build(Engine engine) {
     this.world = World.attract(System.nanoTime(), 10);
-    this.view = new WorldView(engine, this.game.art());
+    this.view = new WorldView(engine, this.game.art(), this.game.rumble());
     this.camera = this.game.art().addBackdrop(engine.scene());
     this.clicks = new Clicks(engine.input());
     this.view.sync(this.world, new Vector3f(), 0f);

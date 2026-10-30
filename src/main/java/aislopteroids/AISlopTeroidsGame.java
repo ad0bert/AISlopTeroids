@@ -22,6 +22,7 @@ import engine.input.Gamepad;
 public final class AISlopTeroidsGame implements Game {
   private static final Logger log = LoggerFactory.getLogger(AISlopTeroidsGame.class);
   private Art art;
+  private Rumble rumble;
   private Settings scores;
   private Settings settings;
   private Options options;
@@ -32,6 +33,7 @@ public final class AISlopTeroidsGame implements Game {
   public void init(Engine engine) {
     this.art = new Art(engine);
     final var input = engine.input();
+    this.rumble = new Rumble(input::rumble);
     // thrust uses the engine's defaults for forward and back: W / S and the up and down arrows (and the left stick)
     input.bind("fire", KeyEvent.VK_CONTROL, KeyEvent.VK_F);
     input.bindGamepad("fire", Gamepad.BUTTON_RIGHT_BUMPER, Gamepad.BUTTON_A);
@@ -89,6 +91,10 @@ public final class AISlopTeroidsGame implements Game {
     return this.art;
   }
 
+  Rumble rumble() {
+    return this.rumble;
+  }
+
   Options options() {
     return this.options;
   }
@@ -97,6 +103,7 @@ public final class AISlopTeroidsGame implements Game {
   void applyOptions(Engine engine) {
     this.options.apply(engine);
     this.art.quality = this.options.quality;
+    this.rumble.enabled = this.options.rumble;
   }
 
   /** Swaps in other options (the defaults); they take effect at the next {@link #applyOptions}. */

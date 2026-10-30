@@ -25,14 +25,14 @@ has no asset files.
 | Difficulty | `Left` / `Right` on the title screen | d-pad |
 | Options | `O` on the title screen or in the pause menu | |
 | Fullscreen | `F11` | |
-| Debug text | `F3` | |
+| Debug text (frame times too) | `F3` | |
 
 The ship's engine pushes only ahead, so to fly somewhere you turn the ship towards it. Once up to speed it keeps
 drifting for a long while when you let go of thrust; brake with `S` to stop. The ship turns after the mouse with a
 little inertia.
 
-The options panel (`O`) has mouse sensitivity, inverted mouse Y, volume, effects volume, ambience volume, fullscreen,
-vsync, graphics quality, the radar and the view. Changes take effect at once and are saved in your user config
+The options panel (`O`) has mouse sensitivity, inverted mouse Y, gamepad rumble, volume, effects volume, ambience
+volume, fullscreen, vsync, graphics quality, the radar and the view. Changes take effect at once and are saved in your user config
 directory.
 
 There are three views; `V` switches between them in the game:
@@ -51,8 +51,13 @@ There are three views; `V` switches between them in the game:
 When your ship is hit, the view pulls back and you watch it break up; the next ship brings you back to your view.
 
 Graphics quality (Low, Medium, High) is for slower computers: Medium blends see-through things more simply and makes
-fewer pieces, specks and sparks in explosions; Low also turns off the glow (bloom), edge smoothing and the light of
-explosions, and makes fewer pieces still. The reflections on the ships stay at every level.
+fewer pieces, specks and sparks in explosions; Low also turns off the glow (bloom), edge smoothing, the ambient
+occlusion (the shade in the rocks' craters and creases) and the light of explosions, and makes fewer pieces still. The
+reflections on the ships stay at every level.
+
+On a gamepad whose motors can be driven, the pad rumbles when your ship blows up, when you jump through hyperspace, when
+rocks and enemy ships blow up near you (less the further away they are) and lightly with every shot. Turn it off in
+the options.
 
 Ambience: the title screen has a warm, breathing pad with a soft, low synth arpeggio inside it. In the game, a darker drone plays under the engine hum, which rises
 with your speed, and a low throb swells while an enemy ship is around.
@@ -112,9 +117,9 @@ You need JDK 25 and Maven. The game depends on the engine, `io.github.ad0bert:en
 **Build the engine yourself (no credentials needed).** This is what CI does:
 
 ```bash
-git clone --branch v0.8.5 https://github.com/ad0bert/EngineNamedScratch.git
+git clone --branch v0.9.0 https://github.com/ad0bert/EngineNamedScratch.git
 cd EngineNamedScratch
-mvn -q versions:set -DnewVersion=0.8.5 -DgenerateBackupPoms=false
+mvn -q versions:set -DnewVersion=0.9.0 -DgenerateBackupPoms=false
 mvn -q install -DskipTests -pl engine -am
 ```
 

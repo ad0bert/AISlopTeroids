@@ -23,13 +23,16 @@ class QualityAndCockpitTest {
     Quality.LOW.apply(settings);
     assertEquals(0f, settings.bloomStrength, "no glow");
     assertFalse(settings.antiAliasing);
+    assertFalse(settings.ambientOcclusion);
     assertFalse(settings.orderIndependentTransparency);
     Quality.HIGH.apply(settings);
     assertEquals(Quality.BLOOM, settings.bloomStrength);
     assertTrue(settings.antiAliasing);
+    assertTrue(settings.ambientOcclusion);
     assertTrue(settings.orderIndependentTransparency);
     Quality.MEDIUM.apply(settings);
-    assertTrue(settings.bloomStrength > 0f && settings.antiAliasing && !settings.orderIndependentTransparency);
+    assertTrue(settings.bloomStrength > 0f && settings.antiAliasing && settings.ambientOcclusion
+        && !settings.orderIndependentTransparency);
 
     assertEquals(26, Quality.HIGH.scale(26));
     assertTrue(Quality.MEDIUM.scale(26) < 26 && Quality.LOW.scale(26) < Quality.MEDIUM.scale(26));

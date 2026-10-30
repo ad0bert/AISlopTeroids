@@ -6,7 +6,7 @@ import engine.core.Engine;
 import engine.core.Settings;
 
 /**
- * The player's choices: mouse sensitivity, inverted look, volumes (all, effects, ambience), fullscreen, vsync,
+ * The player's choices: mouse sensitivity, inverted look, gamepad rumble, volumes (all, effects, ambience), fullscreen, vsync,
  * graphics quality, the radar and the view (cockpit, none or behind the ship), and the difficulty (picked on the
  * title screen). Kept in the engine's {@link Settings} file in the user's config directory, so they survive restarts.
  */
@@ -18,6 +18,7 @@ final class Options {
 
   float mouseSensitivity = DEFAULT_SENSITIVITY;
   boolean invertY;
+  boolean rumble = true;
   float masterVolume = 1f;
   float effectsVolume = 1f;
   float ambienceVolume = 1f;
@@ -34,6 +35,7 @@ final class Options {
     o.mouseSensitivity = clamp(settings.getFloat("controls.mouseSensitivity", DEFAULT_SENSITIVITY), MIN_SENSITIVITY,
         MAX_SENSITIVITY);
     o.invertY = settings.getBoolean("controls.invertY", false);
+    o.rumble = settings.getBoolean("controls.rumble", true);
     o.masterVolume = clamp(settings.getFloat("audio.master", 1f), 0f, 1f);
     o.effectsVolume = clamp(settings.getFloat("audio.effects", 1f), 0f, 1f);
     o.ambienceVolume = clamp(settings.getFloat("audio.ambience", 1f), 0f, 1f);
@@ -51,6 +53,7 @@ final class Options {
   void store(Settings settings) {
     settings.set("controls.mouseSensitivity", this.mouseSensitivity)
         .set("controls.invertY", this.invertY)
+        .set("controls.rumble", this.rumble)
         .set("audio.master", this.masterVolume)
         .set("audio.effects", this.effectsVolume)
         .set("audio.ambience", this.ambienceVolume)
