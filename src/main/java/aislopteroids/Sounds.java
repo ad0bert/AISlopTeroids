@@ -309,7 +309,7 @@ final class Sounds {
 
   /**
    * The ship's engine: a steady rumble with a little hiss and a quiet hum under it, without swells, 4 seconds; the game
-   * sets its pitch and volume by speed.
+   * plays it while the ship thrusts, its pitch and volume set by how hard.
    */
   static AudioData engineHum() {
     final int n = RATE * 4;

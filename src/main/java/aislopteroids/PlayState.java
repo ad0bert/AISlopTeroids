@@ -304,14 +304,16 @@ final class PlayState extends LevelState {
     engine.profiler().end();
   }
 
-  /** The engine hums louder and higher the faster the ship goes; the throb swells while an enemy ship is about. */
+  /**
+   * The engine hums only while it pushes (W, the stick), louder and higher the harder; drifting is silent. The throb
+   * swells while an enemy ship is about.
+   */
   private void followAmbience(float dt) {
     final var ship = this.world.ship();
-    final float speed = ship.alive && !this.world.isGameOver()
-        ? Math.min(1f, ship.velocity.length() / this.world.tuning().shipMaxSpeed) : -1f;
-    final float humTarget = speed < 0f ? 0f : 0.12f + 0.4f * speed;
-    this.hum.volume = approach(this.hum.volume, humTarget, dt * 1.5f);
-    this.hum.pitch = 0.8f + 0.5f * Math.max(0f, speed);
+    final float push = ship.alive && !this.world.isGameOver() ? Math.min(1f, this.thrust.dot(this.forward)) : 0f;
+    final float humTarget = push > 0f ? 0.12f + 0.4f * push : 0f;
+    this.hum.volume = approach(this.hum.volume, humTarget, dt * 4f); // quick to start and to die away
+    this.hum.pitch = 0.8f + 0.5f * push;
     final float dangerTarget = this.world.boss() != null && !this.world.isGameOver() ? 0.6f : 0f;
     this.danger.volume = approach(this.danger.volume, dangerTarget, dt * 0.5f);
   }

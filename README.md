@@ -59,8 +59,8 @@ On a gamepad whose motors can be driven, the pad rumbles when your ship blows up
 rocks and enemy ships blow up near you (less the further away they are) and lightly with every shot. Turn it off in
 the options.
 
-Ambience: the title screen has a warm, breathing pad with a soft, low synth arpeggio inside it. In the game, a darker drone plays under the engine hum, which rises
-with your speed, and a low throb swells while an enemy ship is around.
+Ambience: the title screen has a warm, breathing pad with a soft, low synth arpeggio inside it. In the game, a darker drone plays, the engine hums while you thrust
+(louder and higher with the stick pushed further), and a low throb swells while an enemy ship is around.
 
 ### Rules
 
