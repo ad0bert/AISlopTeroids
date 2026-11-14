@@ -11,9 +11,12 @@ import com.jogamp.newt.event.KeyEvent;
 import aislopteroids.model.Difficulty;
 import aislopteroids.model.Tuning;
 import engine.core.Engine;
+import engine.core.EnginePlugin;
 import engine.core.Game;
 import engine.core.Settings;
+import engine.debug.DebugOverlayPlugin;
 import engine.input.Gamepad;
+import engine.input.MouseReleasePlugin;
 
 /**
  * AISlopTeroids: the classic Asteroids as a 3D first-person game. Sets up what every screen shares (art, sounds,
@@ -29,12 +32,26 @@ public final class AISlopTeroidsGame implements Game {
   private Path tuningFile;
   private Tuning.Loaded tuning = new Tuning.Loaded(new Tuning(), 0, java.util.List.of());
 
+  /**
+   * Of the engine's default plugins, only Esc freeing the mouse and the F3 debug text: the game binds its own controls
+   * (no walking, jumping or flying up and down) and has no rigid bodies to make collision sounds. The debug text starts
+   * hidden, as it would cover the HUD.
+   */
+  @Override
+  public java.util.List<EnginePlugin> plugins() {
+    final var debug = new DebugOverlayPlugin();
+    debug.setVisible(false);
+    return java.util.List.of(new MouseReleasePlugin(), debug);
+  }
+
   @Override
   public void init(Engine engine) {
     this.art = new Art(engine);
     final var input = engine.input();
     this.rumble = new Rumble(input::rumble);
-    // thrust uses the engine's defaults for forward and back: W / S and the up and down arrows (and the left stick)
+    // thrust and brake (the left stick is read in PlayState)
+    input.bind("forward", KeyEvent.VK_W, KeyEvent.VK_UP);
+    input.bind("back", KeyEvent.VK_S, KeyEvent.VK_DOWN);
     input.bind("fire", KeyEvent.VK_CONTROL, KeyEvent.VK_F);
     input.bindGamepad("fire", Gamepad.BUTTON_RIGHT_BUMPER, Gamepad.BUTTON_A);
     input.bindGamepadAxis("fire", Gamepad.AXIS_RIGHT_TRIGGER, 0.5f);
@@ -70,7 +87,6 @@ public final class AISlopTeroidsGame implements Game {
       log.warn("Could not write the tuning example: {}", e.getMessage());
     }
     loadTuning();
-    engine.setDebugOverlayVisible(false); // it would cover the HUD; F3 still shows it
     // -Daislopteroids.autopilot=true: straight into a game that flies itself (screenshots, smoke tests)
     engine.states().push(Boolean.getBoolean("aislopteroids.autopilot") ? new PlayState(this) : new TitleState(this));
     if (Boolean.getBoolean("aislopteroids.showOptions")) { // -Daislopteroids.showOptions=true: the options panel on top (screenshots)

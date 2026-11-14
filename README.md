@@ -117,9 +117,9 @@ You need JDK 25 and Maven. The game depends on the engine, `io.github.ad0bert:en
 **Build the engine yourself (no credentials needed).** This is what CI does:
 
 ```bash
-git clone --branch v0.9.0 https://github.com/ad0bert/EngineNamedScratch.git
+git clone --branch v0.10.0 https://github.com/ad0bert/EngineNamedScratch.git
 cd EngineNamedScratch
-mvn -q versions:set -DnewVersion=0.9.0 -DgenerateBackupPoms=false
+mvn -q versions:set -DnewVersion=0.10.0 -DgenerateBackupPoms=false
 mvn -q install -DskipTests -pl engine -am
 ```
 
@@ -138,7 +138,8 @@ mvn package -Pjpackage                   # also target/jpackage: the game with i
 opens the options panel at start. `-Daislopteroids.view=COCKPIT`, `CLEAR` or `CHASE` starts the game in that view. All are
 handy for screenshots.
 The engine's system properties (`engine.fullscreen`, `engine.vsync`, `engine.screenshot`, ...) work too. CI runs the
-title screen and an autopilot game under Xvfb and keeps the screenshots as an artifact.
+title screen and an autopilot game under Xvfb and keeps the screenshots as an artifact; `HeadlessGameTest` runs the
+same screens on the engine without a window as part of `mvn test`.
 
 ## Releases
 
